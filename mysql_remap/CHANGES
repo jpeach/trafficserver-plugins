@@ -1,0 +1,5 @@
+                                                         -*- coding: utf-8 -*-
+
+Changes with Apache Traffic Server mysql_remap plugin 1.0
+
+  *) This is a basic plugin for doing remaps from a MySQL database.

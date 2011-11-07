@@ -1,0 +1,18 @@
+Traffic Server MySQL remap 1.0 STATUS:                                              -*-text-*-
+
+The current version of this file can be found at:
+
+  * http://svn.apache.org/repos/asf/trafficserver/plugins/mysql_remap/STATUS
+
+Release history:
+    1.0.0-alpha     : Released 11/16/2010
+    1.0.1-alpha     : Released 03/07/2011
+
+Contributors looking for a mission:
+  * check the README
+
+RELEASE PROCESS
+
+The Traffic Server release process is documented at
+
+    http://cwiki.apache.org/confluence/display/TS/ReleaseProcess
