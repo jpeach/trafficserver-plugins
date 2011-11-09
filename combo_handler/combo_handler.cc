@@ -26,7 +26,7 @@
 #include <time.h>
 #include <arpa/inet.h>
 
-#include <InkAPI.h>
+#include <ts/ts.h>
 
 #include <HttpDataFetcherImpl.h>
 #include <gzip.h>
@@ -35,8 +35,7 @@
 using namespace std;
 using namespace EsiLib;
 
-#define DEBUG_TAG "combohandler"
-#define FETCHER_DEBUG_TAG "combohandler_fetcher"
+#define DEBUG_TAG "combo_handler"
 
 static string SIG_KEY_NAME;
 
@@ -62,7 +61,8 @@ struct ClientRequest {
   StringList file_urls;
   bool gzip_accepted;
   string defaultBucket;	//default Bucket is set to l
-  ClientRequest() : status(INK_HTTP_STATUS_OK), client_ip(0), client_port(0), gzip_accepted(false), defaultBucket("l") { };
+  ClientRequest()
+    : status(INK_HTTP_STATUS_OK), client_ip(0), client_port(0), gzip_accepted(false), defaultBucket("l") { };
 };
 
 struct InterceptData {
@@ -73,8 +73,10 @@ struct InterceptData {
     INKVIO vio;
     INKIOBuffer buffer;
     INKIOBufferReader reader;
+
     IoHandle()
       : vio(0), buffer(0), reader(0) { };
+
     ~IoHandle() {
       if (reader) {
         INKIOBufferReaderFree(reader);
@@ -107,7 +109,6 @@ struct InterceptData {
   }
 
   bool init(INKVConn vconn);
-
   void setupWrite();
 
   ~InterceptData();
@@ -139,14 +140,16 @@ InterceptData::init(INKVConn vconn)
 }
 
 void
-InterceptData::setupWrite() {
+InterceptData::setupWrite()
+{
   INKAssert(output.buffer == 0);
   output.buffer = INKIOBufferCreate();
   output.reader = INKIOBufferReaderAlloc(output.buffer);
   output.vio = INKVConnWrite(net_vc, contp, output.reader, INT_MAX);
 }
 
-InterceptData::~InterceptData() {
+InterceptData::~InterceptData()
+{
   if (req_hdr_loc) {
     INKHandleMLocRelease(req_hdr_bufp, INK_NULL_MLOC, req_hdr_loc);
   }
@@ -178,8 +181,11 @@ static bool writeStandardHeaderFields(InterceptData &int_data, int &n_bytes_writ
 static void prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks, string &resp_header_fields);
 static bool getContentType(INKMBuffer bufp, INKMLoc hdr_loc, string &resp_header_fields);
 static bool getDefaultBucket(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_obj, ClientRequest &creq);
+
+
 void
-INKPluginInit(int argc, const char *argv[]) {
+INKPluginInit(int argc, const char *argv[])
+{
   if ((argc > 1) && (strcmp(argv[1], "-") != 0)) {
     COMBO_HANDLER_PATH =  argv[1];
     if (COMBO_HANDLER_PATH == "/") {
@@ -216,7 +222,8 @@ INKPluginInit(int argc, const char *argv[]) {
 }
 
 static int
-handleReadRequestHeader(INKCont contp, INKEvent event, void *edata) {
+handleReadRequestHeader(INKCont contp, INKEvent event, void *edata)
+{
   INKAssert(event == INK_EVENT_HTTP_READ_REQUEST_HDR);
 
   LOG_DEBUG("handling read request header event...");
@@ -262,10 +269,13 @@ handleReadRequestHeader(INKCont contp, INKEvent event, void *edata) {
   return 1;
 }
 
-static bool isComboHandlerRequest(INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_loc) {
+static bool
+isComboHandlerRequest(INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_loc)
+{
   int method_len;
   bool retval = false;
   const char *method = INKHttpHdrMethodGet(bufp, hdr_loc, &method_len);
+
   if (method == INK_ERROR_PTR) {
     LOG_ERROR("Could not obtain method!", __FUNCTION__);
   } else {
@@ -293,59 +303,61 @@ static bool isComboHandlerRequest(INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_
   return retval;
 }
 
-static bool getDefaultBucket(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_obj, ClientRequest &creq)	/* bufp holds HTTPHdr, hdr_obj = httphdr->impl(hdr_obj) */
+static bool
+getDefaultBucket(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_obj, ClientRequest &creq)
 {
-	LOG_DEBUG("In getDefaultBucket");
-	INKMLoc field_loc;
-	const char* host;
-	int host_len = 0;
-	bool defaultBucketFound = false;
-	field_loc=INKMimeHdrFieldFind(bufp, hdr_obj, INK_MIME_FIELD_HOST, -1);
-    if (field_loc == INK_ERROR_PTR)
+  LOG_DEBUG("In getDefaultBucket");
+  INKMLoc field_loc;
+  const char* host;
+  int host_len = 0;
+  bool defaultBucketFound = false;
+
+  field_loc=INKMimeHdrFieldFind(bufp, hdr_obj, INK_MIME_FIELD_HOST, -1);
+  if (field_loc == INK_ERROR_PTR) {
+    LOG_ERROR("Host field not found.");
+    return false;
+  }
+
+  host=INKMimeHdrFieldValueGet (bufp, hdr_obj, field_loc, 0, &host_len);
+  if (!host || host_len <= 0) {
+    LOG_ERROR("Error Extracting Host Header");
+    INKHandleMLocRelease (bufp, hdr_obj, field_loc);
+    return false;
+  }
+
+  LOG_DEBUG("host: %s", host);
+  for(int i = 0 ; i < host_len; i++)
     {
-    	LOG_ERROR("Host field not found.");
-    	return false;
+      if (host[i] == '.')
+        {
+          creq.defaultBucket = string(host, i);
+          defaultBucketFound = true;
+          break;
+        }
     }
 
-    host=INKMimeHdrFieldValueGet (bufp, hdr_obj, field_loc, 0, &host_len);
-    if (!host || host_len <= 0)
-    {
-    	LOG_ERROR("Error Extracting Host Header");
-    	INKHandleMLocRelease (bufp, hdr_obj, field_loc);
-    	return false;
-    }
+  INKHandleMLocRelease (bufp, hdr_obj, field_loc);
+  INKHandleStringRelease(bufp, field_loc, host);
 
-    LOG_DEBUG("host: %s", host);
-	for(int i = 0 ; i < host_len; i++)
-	{
-		if (host[i] == '.')
-		{
-			creq.defaultBucket = string(host, i);
-			defaultBucketFound = true;
-			break;
-		}
-	}
-
-	INKHandleMLocRelease (bufp, hdr_obj, field_loc);
-	INKHandleStringRelease(bufp, field_loc, host);
-
-	LOG_DEBUG("defaultBucket: %s", creq.defaultBucket.data());
-	return defaultBucketFound;
+  LOG_DEBUG("defaultBucket: %s", creq.defaultBucket.data());
+  return defaultBucketFound;
 }
 
-static void getClientRequest(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_loc,
-                             ClientRequest &creq) {
+static void
+getClientRequest(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_loc, ClientRequest &creq)
+{
   int query_len;
   const char *query = INKUrlHttpQueryGet(bufp, url_loc, &query_len);
+
   if (query == INK_ERROR_PTR) {
     LOG_ERROR("Could not get query from request URL");
   } else {
-	if (!getDefaultBucket(txnp, bufp, hdr_loc, creq))
-	{
-		LOG_ERROR("failed getting Default Bucket for the request");
-		INKHandleStringRelease(bufp, url_loc, query);
-		return;
-	}
+    if (!getDefaultBucket(txnp, bufp, hdr_loc, creq))
+      {
+        LOG_ERROR("failed getting Default Bucket for the request");
+        INKHandleStringRelease(bufp, url_loc, query);
+        return;
+      }
     parseQueryParameters(query, query_len, creq);
     INKHandleStringRelease(bufp, url_loc, query);
     creq.client_ip = ntohl(INKHttpTxnClientIPGet(txnp));
@@ -356,10 +368,11 @@ static void getClientRequest(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_loc, 
     }
     checkGzipAcceptance(bufp, hdr_loc, creq);
   }
-
 }
 
-static void parseQueryParameters(const char *query, int query_len, ClientRequest &creq) {
+static void
+parseQueryParameters(const char *query, int query_len, ClientRequest &creq)
+{
   creq.status = INK_HTTP_STATUS_OK;
   int param_start_pos = 0;
   bool sig_verified = false;
@@ -370,6 +383,7 @@ static void parseQueryParameters(const char *query, int query_len, ClientRequest
   int common_prefix_size = 0;
   const char *common_prefix_path = 0;
   int common_prefix_path_size = 0;
+
   for (int i = 0; i <= query_len; ++i) {
     if ((i == query_len) || (query[i] == '&') || (query[i] == '?')) {
       int param_len = i - param_start_pos;
@@ -382,89 +396,91 @@ static void parseQueryParameters(const char *query, int query_len, ClientRequest
             } else if (param_len == 4) {
               LOG_DEBUG("Signature empty in query [%.*s]", query_len, query);
             } else {
-                // TODO - really verify the signature
-                LOG_DEBUG("Verified signature successfully");
-                sig_verified = true;
-              } else {
-                LOG_DEBUG("Signature [%.*s] on query [%.*s] is invalid", param_len - 4, param + 4,
-                          param_start_pos, query);
-              }
+              // TODO - really verify the signature
+              LOG_DEBUG("Verified signature successfully");
+              sig_verified = true;
+            } else {
+              LOG_DEBUG("Signature [%.*s] on query [%.*s] is invalid", param_len - 4, param + 4,
+                        param_start_pos, query);
             }
-          } else {
-            LOG_DEBUG("Verification not configured; ignoring signature...");
           }
-          break; // nothing useful after the signature
+        } else {
+          LOG_DEBUG("Verification not configured; ignoring signature...");
         }
-        if ((param_len >= 2) && (param[0] == 'p') && (param[1] == '=')) {
-          common_prefix_size = param_len - 2;
-          common_prefix_path_size = 0;
-          if (common_prefix_size) {
-            common_prefix = param + 2;
-            for (int i = 0; i < common_prefix_size; ++i) {
-              if (common_prefix[i] == ':') {
-                common_prefix_path = common_prefix;
-                common_prefix_path_size = i;
-                ++i; // go beyond the ':'
-                common_prefix += i;
-                common_prefix_size -= i;
-                break;
-              }
-            }
-          }
-          LOG_DEBUG("Common prefix is [%.*s], common prefix path is [%.*s]", common_prefix_size, common_prefix,
-                    common_prefix_path_size, common_prefix_path);
-        }
-        else {
-          if (common_prefix_path_size) {
-            if (colon_pos >= param_start_pos) { // we have a colon in this param as well?
-              LOG_ERROR("Ambiguous 'bucket': [%.*s] specified in common prefix and [%.*s] specified in "
-                        "current parameter [%.*s]", common_prefix_path_size, common_prefix_path,
-                        colon_pos - param_start_pos, param, param_len, param);
-              creq.file_urls.clear();
-              break;
-            }
-            file_url.append(common_prefix_path, common_prefix_path_size);
-          }
-          else if (colon_pos >= param_start_pos) { // we have a colon
-            if ((colon_pos == param_start_pos) || (colon_pos == (i - 1))) {
-              LOG_ERROR("Colon-separated path [%.*s] has empty part(s)", param_len, param);
-              creq.file_urls.clear();
-              break;
-            }
-            file_url.append(param, colon_pos - param_start_pos); // appending pre ':' part first
-            
-            // modify these to point to the "actual" file path
-            param_start_pos = colon_pos + 1;
-            param_len = i - param_start_pos;
-            param = query + param_start_pos;
-          } else {
-            file_url += creq.defaultBucket; // default path
-          }
-          file_url += '/';
-          if (common_prefix_size) {
-            file_url.append(common_prefix, common_prefix_size);
-          }
-          file_url.append(param, param_len);
-          creq.file_urls.push_back(file_url);
-          LOG_DEBUG("Added file path [%s]", file_url.c_str());
-          file_url.resize(file_base_url_size);
-        }
+        break; // nothing useful after the signature
       }
-      param_start_pos = i + 1;
-    } else if (query[i] == ':') {
-      colon_pos = i;
+      if ((param_len >= 2) && (param[0] == 'p') && (param[1] == '=')) {
+        common_prefix_size = param_len - 2;
+        common_prefix_path_size = 0;
+        if (common_prefix_size) {
+          common_prefix = param + 2;
+          for (int i = 0; i < common_prefix_size; ++i) {
+            if (common_prefix[i] == ':') {
+              common_prefix_path = common_prefix;
+              common_prefix_path_size = i;
+              ++i; // go beyond the ':'
+              common_prefix += i;
+              common_prefix_size -= i;
+              break;
+            }
+          }
+        }
+        LOG_DEBUG("Common prefix is [%.*s], common prefix path is [%.*s]", common_prefix_size, common_prefix,
+                  common_prefix_path_size, common_prefix_path);
+      }
+      else {
+        if (common_prefix_path_size) {
+          if (colon_pos >= param_start_pos) { // we have a colon in this param as well?
+            LOG_ERROR("Ambiguous 'bucket': [%.*s] specified in common prefix and [%.*s] specified in "
+                      "current parameter [%.*s]", common_prefix_path_size, common_prefix_path,
+                      colon_pos - param_start_pos, param, param_len, param);
+            creq.file_urls.clear();
+            break;
+          }
+          file_url.append(common_prefix_path, common_prefix_path_size);
+        }
+        else if (colon_pos >= param_start_pos) { // we have a colon
+          if ((colon_pos == param_start_pos) || (colon_pos == (i - 1))) {
+            LOG_ERROR("Colon-separated path [%.*s] has empty part(s)", param_len, param);
+            creq.file_urls.clear();
+            break;
+          }
+          file_url.append(param, colon_pos - param_start_pos); // appending pre ':' part first
+            
+          // modify these to point to the "actual" file path
+          param_start_pos = colon_pos + 1;
+          param_len = i - param_start_pos;
+          param = query + param_start_pos;
+        } else {
+          file_url += creq.defaultBucket; // default path
+        }
+        file_url += '/';
+        if (common_prefix_size) {
+          file_url.append(common_prefix, common_prefix_size);
+        }
+        file_url.append(param, param_len);
+        creq.file_urls.push_back(file_url);
+        LOG_DEBUG("Added file path [%s]", file_url.c_str());
+        file_url.resize(file_base_url_size);
+      }
     }
-  }
-  if (!creq.file_urls.size()) {
-    creq.status = INK_HTTP_STATUS_BAD_REQUEST;
-  } else if (SIG_KEY_NAME.size() && !sig_verified) {
-    LOG_DEBUG("Invalid/empty signature found; Need valid signature");
-    creq.status = INK_HTTP_STATUS_FORBIDDEN;
-    creq.file_urls.clear();
+    param_start_pos = i + 1;
+  } else if (query[i] == ':') {
+    colon_pos = i;
   }
 }
+if (!creq.file_urls.size()) {
+  creq.status = INK_HTTP_STATUS_BAD_REQUEST;
+ } else if (SIG_KEY_NAME.size() && !sig_verified) {
+  LOG_DEBUG("Invalid/empty signature found; Need valid signature");
+  creq.status = INK_HTTP_STATUS_FORBIDDEN;
+  creq.file_urls.clear();
+ }
+}
 
-static void checkGzipAcceptance(INKMBuffer bufp, INKMLoc hdr_loc, ClientRequest &creq) {
+static void
+checkGzipAcceptance(INKMBuffer bufp, INKMLoc hdr_loc, ClientRequest &creq)
+{
   creq.gzip_accepted = false;
   INKMLoc field_loc = INKMimeHdrFieldFind(bufp, hdr_loc, INK_MIME_FIELD_ACCEPT_ENCODING,
                                           INK_MIME_LEN_ACCEPT_ENCODING);
@@ -472,6 +488,7 @@ static void checkGzipAcceptance(INKMBuffer bufp, INKMLoc hdr_loc, ClientRequest 
     const char *value;
     int value_len;
     int n_values = INKMimeHdrFieldValuesCount(bufp, hdr_loc, field_loc);
+
     for (int i = 0; i < n_values; ++i) {
       if (INKMimeHdrFieldValueStringGet(bufp, hdr_loc, field_loc, i, &value, &value_len) == INK_SUCCESS) {
         if ((value_len == INK_HTTP_LEN_GZIP) && (strncasecmp(value, INK_HTTP_VALUE_GZIP, value_len) == 0)) {
@@ -491,7 +508,9 @@ static void checkGzipAcceptance(INKMBuffer bufp, INKMLoc hdr_loc, ClientRequest 
   LOG_DEBUG("Client %s gzip encoding", (creq.gzip_accepted ? "accepts" : "does not accept"));
 }
 
-static int handleServerEvent(INKCont contp, INKEvent event, void *edata) {
+static int
+handleServerEvent(INKCont contp, INKEvent event, void *edata)
+{
   InterceptData *int_data = static_cast<InterceptData *>(INKContDataGet(contp));
   bool write_response = false;
 
@@ -566,7 +585,9 @@ static int handleServerEvent(INKCont contp, INKEvent event, void *edata) {
   return 1;
 }
 
-static bool initRequestProcessing(InterceptData &int_data, void *edata, bool &write_response) {
+static bool
+initRequestProcessing(InterceptData &int_data, void *edata, bool &write_response)
+{
   INKAssert(int_data.initialized == false);
   if (!int_data.init(static_cast<INKVConn>(edata))) {
     LOG_ERROR("Could not initialize intercept data!");
@@ -589,7 +610,9 @@ static bool initRequestProcessing(InterceptData &int_data, void *edata, bool &wr
   return true;
 }
 
-static bool readInterceptRequest(InterceptData &int_data) {
+static bool
+readInterceptRequest(InterceptData &int_data)
+{
   INKAssert(!int_data.read_complete);
   int avail = INKIOBufferReaderAvail(int_data.input.reader);
   if (avail == INK_ERROR) {
@@ -644,7 +667,9 @@ static const string FORBIDDEN_RESPONSE("HTTP/1.0 403 Forbidden\r\n\r\n");
 static const char GZIP_ENCODING_FIELD[] = { "Content-Encoding: gzip\r\n" };
 static const int GZIP_ENCODING_FIELD_SIZE = sizeof(GZIP_ENCODING_FIELD) - 1;
 
-static bool writeResponse(InterceptData &int_data) {
+static bool
+writeResponse(InterceptData &int_data)
+{
   int_data.setupWrite();
   
   ByteBlockList body_blocks;
@@ -706,8 +731,11 @@ static bool writeResponse(InterceptData &int_data) {
   return true;
 }
 
-static void prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks, string &resp_header_fields) {
+static void
+prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks, string &resp_header_fields)
+{
   bool got_content_type = false;
+
   if (int_data.creq.status == INK_HTTP_STATUS_OK) {
     HttpDataFetcherImpl::ResponseData resp_data;
     INKMLoc field_loc;
@@ -772,7 +800,9 @@ static void prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks,
   }
 }
 
-static bool getContentType(INKMBuffer bufp, INKMLoc hdr_loc, string &resp_header_fields) {
+static bool
+getContentType(INKMBuffer bufp, INKMLoc hdr_loc, string &resp_header_fields)
+{
   bool retval = false;
   INKMLoc field_loc = INKMimeHdrFieldFind(bufp, hdr_loc, INK_MIME_FIELD_CONTENT_TYPE,
                                           INK_MIME_LEN_CONTENT_TYPE);
@@ -808,7 +838,9 @@ static const char INVARIANT_FIELD_LINES[] = { "Vary: Accept-Encoding\r\n"
                                               "Cache-Control: max-age=315360000\r\n" };
 static const char INVARIANT_FIELD_LINES_SIZE = sizeof(INVARIANT_FIELD_LINES) - 1;
 
-static bool writeStandardHeaderFields(InterceptData &int_data, int &n_bytes_written) {
+static bool
+writeStandardHeaderFields(InterceptData &int_data, int &n_bytes_written)
+{
   if (INKIOBufferWrite(int_data.output.buffer, INVARIANT_FIELD_LINES,
                        INVARIANT_FIELD_LINES_SIZE) == INK_ERROR) {
     LOG_ERROR("Error while writing invariant fields");
@@ -827,7 +859,9 @@ static bool writeStandardHeaderFields(InterceptData &int_data, int &n_bytes_writ
   return true;
 }
 
-static bool writeErrorResponse(InterceptData &int_data, int &n_bytes_written) {
+static bool
+writeErrorResponse(InterceptData &int_data, int &n_bytes_written)
+{
   const string *response;
   switch (int_data.creq.status) {
   case INK_HTTP_STATUS_BAD_REQUEST:
