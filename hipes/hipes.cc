@@ -1,3 +1,24 @@
+/** @file
+
+    @section license License
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    "License"); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+*/
+
 //////////////////////////////////////////////////////////////////////////////////////////////
 // hipes: plugin for the HIPES services.
 // ------
@@ -25,7 +46,7 @@ static char UNUSED rcsId__url_remap_cc[] = "@(#) $Id: yfor_remap.cc 218 2009-04-
 #include <ts/remap.h>
 #include <ts/ts.h>
 
-const char* HIPES_SERVER_NAME="hipes.yimg.com";
+const char* HIPES_SERVER_NAME="hipes.example.com";
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -130,10 +151,10 @@ unescapify(const char* src, char* dst, int len) {
 //
 struct HIPESService
 {
-  HIPESService() :
-    url_param("url"), path(""), svc_server(""), svc_port(80), ssl(false), hipes_server(HIPES_SERVER_NAME),
-    hipes_port(80), default_redirect_flag(1), x_hipes_header("X-HIPES-Redirect"),
-    active_timeout(-1), no_activity_timeout(-1), connect_timeout(-1), dns_timeout(-1)
+  HIPESService()
+    : url_param("url"), path(""), svc_server(""), svc_port(80), ssl(false), hipes_server(HIPES_SERVER_NAME),
+      hipes_port(80), default_redirect_flag(1), x_hipes_header("X-HIPES-Redirect"),
+      active_timeout(-1), no_activity_timeout(-1), connect_timeout(-1), dns_timeout(-1)
   { };
 
   std::string url_param;
