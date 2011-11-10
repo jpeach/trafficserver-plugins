@@ -19,23 +19,8 @@
     limitations under the License.
 */
 
-//////////////////////////////////////////////////////////////////////////////////////////////
-// hipes: plugin for the HIPES services.
-// ------
-//
-// To use this plugin, configure a remap.config rule like
-//
-//   map http://foo.com http://bar.com @plugin=hipes.so @pparam=<parameter> ...
-//
-//
-// The list of of all available parameters is in the README.
-//
-//
-//
-
 #define UNUSED __attribute__ ((unused))
 static char UNUSED rcsId__url_remap_cc[] = "@(#) $Id: yfor_remap.cc 218 2009-04-25 01:29:16Z leifh $ built on " __DATE__ " " __TIME__;
-
 
 #include <stdio.h>
 #include <sys/time.h>
@@ -46,7 +31,8 @@ static char UNUSED rcsId__url_remap_cc[] = "@(#) $Id: yfor_remap.cc 218 2009-04-
 #include <ts/remap.h>
 #include <ts/ts.h>
 
-const char* HIPES_SERVER_NAME="hipes.example.com";
+static const char* PLUGIN_NAME = "hipes";
+static const char* HIPES_SERVER_NAME = "hipes.example.com";
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -173,31 +159,25 @@ struct HIPESService
 };
 
 
-
 ///////////////////////////////////////////////////////////////////////////////
 // Initialize the plugin.
 //
 int
-tsremap_init(TSREMAP_INTERFACE *api_info, char *errbuf, int errbuf_size)
+TSRemapInit(TSREMAP_INTERFACE *api_info, char *errbuf, int errbuf_size)
 {
   if (!api_info) {
     strncpy(errbuf, "[tsremap_init] - Invalid TSREMAP_INTERFACE argument", errbuf_size - 1);
-    return -1;
-  }
-
-  if (api_info->size < sizeof(TSREMAP_INTERFACE)) {
-    strncpy(errbuf, "[tsremap_init] - Incorrect size of TSREMAP_INTERFACE structure", errbuf_size - 1);
-    return -2;
+    return TS_ERROR;
   }
 
   if (api_info->tsremap_version < TSREMAP_VERSION) {
     snprintf(errbuf, errbuf_size - 1, "[tsremap_init] - Incorrect API version %ld.%ld",
              api_info->tsremap_version >> 16, (api_info->tsremap_version & 0xffff));
-    return -3;
+    return TS_ERROR;
   }
 
   INKDebug("hipes", "plugin is succesfully initialized");
-  return 0;
+  return TS_SUCCESS;
 }
 
 
