@@ -16,8 +16,8 @@
 
 TSXS?=tsxs
 
-all:	buffer_upload.c
-	$(TSXS) -v -c $? -o buffer_upload.so
+all:	buffer_upload.cc
+	$(TSXS) -v -C $? -o buffer_upload.so
 
 install:
 	$(TSXS) -i -o buffer_upload.so
