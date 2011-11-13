@@ -11,29 +11,29 @@ const int HttpDataFetcherImpl::FETCH_EVENT_ID_BASE = 10000;
 inline void HttpDataFetcherImpl::_release(RequestData &req_data) {
   if (req_data.bufp) {
     if (req_data.hdr_loc) {
-      INKHandleMLocRelease(req_data.bufp, INK_NULL_MLOC, req_data.hdr_loc);
+      TSHandleMLocRelease(req_data.bufp, TS_NULL_MLOC, req_data.hdr_loc);
       req_data.hdr_loc = 0;
     }
-    INKMBufferDestroy(req_data.bufp);
+    TSMBufferDestroy(req_data.bufp);
     req_data.bufp = 0;
   }
 }
 
-HttpDataFetcherImpl::HttpDataFetcherImpl(INKCont contp, unsigned int client_ip, int client_port,
+HttpDataFetcherImpl::HttpDataFetcherImpl(TSCont contp,sockaddr const* client_addr,
                                          const char *debug_tag)
   : _contp(contp), _debug_tag(debug_tag), _n_pending_requests(0), _curr_event_id_base(FETCH_EVENT_ID_BASE),
-    _headers_str(""), _client_ip(client_ip), _client_port(client_port) {
-  _http_parser = INKHttpParserCreate();
+    _headers_str(""),_client_addr(client_addr) {
+  _http_parser = TSHttpParserCreate();
 }
 
 HttpDataFetcherImpl::~HttpDataFetcherImpl() { 
   clear(); 
-  INKHttpParserDestroy(_http_parser); 
+  TSHttpParserDestroy(_http_parser); 
 }
 
 inline void
 HttpDataFetcherImpl::_buildHeadersString() {
-  INKDebug(_debug_tag.c_str(), "[%s] Building header string...", __FUNCTION__);
+  TSDebug(_debug_tag.c_str(), "[%s] Building header string...", __FUNCTION__);
   _headers_str.clear();
   for (StringHash::const_iterator iter = _headers.begin(); iter != _headers.end(); ++iter) {
     _headers_str.append(iter->first);
@@ -66,7 +66,7 @@ HttpDataFetcherImpl::addFetchRequest(const string &url, FetchedDataProcessor *ca
     ((insert_result.first)->second).callback_objects.push_back(callback_obj);
   }
   if (!insert_result.second) {
-    INKDebug(_debug_tag.c_str(), "[%s] Fetch request for url [%.*s] already added", __FUNCTION__,
+    TSDebug(_debug_tag.c_str(), "[%s] Fetch request for url [%.*s] already added", __FUNCTION__,
              url.size(), url.data());
     return true;
   }
@@ -74,19 +74,19 @@ HttpDataFetcherImpl::addFetchRequest(const string &url, FetchedDataProcessor *ca
   string http_req;
   _createRequest(http_req, url);
 
-  INKFetchEvent event_ids;
+  TSFetchEvent event_ids;
   event_ids.success_event_id = _curr_event_id_base;
   event_ids.failure_event_id = _curr_event_id_base + 1;
   event_ids.timeout_event_id = _curr_event_id_base + 2;
   _curr_event_id_base += 3;
 
-  if (INKFetchUrl(http_req.data(), http_req.size(), _client_ip, _client_port, _contp, AFTER_BODY,
-                  event_ids) == INK_ERROR) {
-    INKError("Failed to add fetch request for URL [%.*s]", url.size(), url.data());
+  if (TSFetchUrl(http_req.data(), http_req.size(), _client_addr, _contp, AFTER_BODY,
+                  event_ids) == TS_ERROR) {
+    TSError("Failed to add fetch request for URL [%.*s]", url.size(), url.data());
     return false;
   }
   
-  INKDebug(_debug_tag.c_str(), "[%s] Successfully added fetch request for URL [%.*s]",
+  TSDebug(_debug_tag.c_str(), "[%s] Successfully added fetch request for URL [%.*s]",
            __FUNCTION__, url.size(), url.data());
   _page_entry_lookup.push_back(insert_result.first);
   ++_n_pending_requests;
@@ -94,10 +94,10 @@ HttpDataFetcherImpl::addFetchRequest(const string &url, FetchedDataProcessor *ca
 }
 
 bool
-HttpDataFetcherImpl::_isFetchEvent(INKEvent event, int &base_event_id) const {
+HttpDataFetcherImpl::_isFetchEvent(TSEvent event, int &base_event_id) const {
   base_event_id = _getBaseEventId(event);
   if ((base_event_id < 0) || (base_event_id >= static_cast<int>(_page_entry_lookup.size()))) {
-    INKDebug(_debug_tag.c_str(), "[%s] Event id %d not within fetch event id range [%d, %d)",
+    TSDebug(_debug_tag.c_str(), "[%s] Event id %d not within fetch event id range [%d, %d)",
              __FUNCTION__, event, FETCH_EVENT_ID_BASE, FETCH_EVENT_ID_BASE + (_page_entry_lookup.size() * 3));
     return false;
   }
@@ -105,10 +105,10 @@ HttpDataFetcherImpl::_isFetchEvent(INKEvent event, int &base_event_id) const {
 }
 
 bool
-HttpDataFetcherImpl::handleFetchEvent(INKEvent event, void *edata) {
+HttpDataFetcherImpl::handleFetchEvent(TSEvent event, void *edata) {
   int base_event_id;
   if (!_isFetchEvent(event, base_event_id)) {
-    INKError("[%s] Event %d is not a fetch event", __FUNCTION__, event);
+    TSError("[%s] Event %d is not a fetch event", __FUNCTION__, event);
     return false;
   }
 
@@ -118,7 +118,7 @@ HttpDataFetcherImpl::handleFetchEvent(INKEvent event, void *edata) {
 
   if (req_data.complete) {
     // can only happen if there's a bug in this or fetch API code
-    INKError("[%s] URL [%s] already completed; Retaining original data", __FUNCTION__, req_str.c_str());
+    TSError("[%s] URL [%s] already completed; Retaining original data", __FUNCTION__, req_str.c_str());
     return false;
   }
 
@@ -127,29 +127,29 @@ HttpDataFetcherImpl::handleFetchEvent(INKEvent event, void *edata) {
 
   int event_id = (static_cast<int>(event) - FETCH_EVENT_ID_BASE) % 3;
   if (event_id != 0) { // failure or timeout
-    INKError("[%s] Received failure/timeout event id %d for request [%.*s]",
+    TSError("[%s] Received failure/timeout event id %d for request [%.*s]",
              __FUNCTION__, event_id, req_str.size(), req_str.data());
     return true;
   }
 
   int page_data_len;
-  const char *page_data = INKFetchRespGet(static_cast<INKHttpTxn>(edata), &page_data_len);
+  const char *page_data = TSFetchRespGet(static_cast<TSHttpTxn>(edata), &page_data_len);
   req_data.response.assign(page_data, page_data_len);
   bool valid_data_received = false;
   const char *startptr = req_data.response.data(), *endptr = startptr + page_data_len;
 
-  req_data.bufp = INKMBufferCreate();
-  req_data.hdr_loc = INKHttpHdrCreate(req_data.bufp);
-  INKHttpHdrTypeSet(req_data.bufp, req_data.hdr_loc, INK_HTTP_TYPE_RESPONSE);
-  INKHttpParserClear(_http_parser);
+  req_data.bufp = TSMBufferCreate();
+  req_data.hdr_loc = TSHttpHdrCreate(req_data.bufp);
+  TSHttpHdrTypeSet(req_data.bufp, req_data.hdr_loc, TS_HTTP_TYPE_RESPONSE);
+  TSHttpParserClear(_http_parser);
   
-  if (INKHttpHdrParseResp(_http_parser, req_data.bufp, req_data.hdr_loc, &startptr, endptr) == INK_PARSE_DONE) {
-    INKHttpStatus resp_status = INKHttpHdrStatusGet(req_data.bufp, req_data.hdr_loc);
-    if (resp_status == INK_HTTP_STATUS_OK) {
+  if (TSHttpHdrParseResp(_http_parser, req_data.bufp, req_data.hdr_loc, &startptr, endptr) == TS_PARSE_DONE) {
+    TSHttpStatus resp_status = TSHttpHdrStatusGet(req_data.bufp, req_data.hdr_loc);
+    if (resp_status == TS_HTTP_STATUS_OK) {
       valid_data_received = true;
       req_data.body_len = endptr - startptr;
       req_data.body = startptr;
-      INKDebug(_debug_tag.c_str(),
+      TSDebug(_debug_tag.c_str(),
                "[%s] Inserted page data of size %d starting with [%.6s] for request [%s]", __FUNCTION__,
                req_data.body_len, (req_data.body_len ? req_data.body : "(null)"), req_str.c_str());
       for (CallbackObjectList::iterator list_iter = req_data.callback_objects.begin();
@@ -157,11 +157,11 @@ HttpDataFetcherImpl::handleFetchEvent(INKEvent event, void *edata) {
         (*list_iter)->processData(req_str.data(), req_str.size(), req_data.body, req_data.body_len);
       }
     } else {
-      INKDebug(_debug_tag.c_str(), "[%s] Received non-OK status %d for request [%.*s]",
+      TSDebug(_debug_tag.c_str(), "[%s] Received non-OK status %d for request [%.*s]",
                __FUNCTION__, resp_status, req_str.size(), req_str.data());
     } 
   } else {
-    INKDebug(_debug_tag.c_str(), "[%s] Could not parse response for request [%.*s]",
+    TSDebug(_debug_tag.c_str(), "[%s] Could not parse response for request [%.*s]",
              __FUNCTION__, req_str.size(), req_str.data());
   }
 
@@ -177,23 +177,23 @@ bool
 HttpDataFetcherImpl::getData(const string &url, ResponseData &resp_data) const {
   UrlToContentMap::const_iterator iter = _pages.find(url);
   if (iter == _pages.end()) {
-    INKError("Content being requested for unregistered URL [%.*s]", url.size(), url.data());
+    TSError("Content being requested for unregistered URL [%.*s]", url.size(), url.data());
     return false;
   }
   const RequestData &req_data = iter->second; // handy reference
   if (!req_data.complete) {
     // request not completed yet
-    INKError("Request for URL [%.*s] not complete", url.size(), url.data());
+    TSError("Request for URL [%.*s] not complete", url.size(), url.data());
     return false;
   }
   if (req_data.response.empty()) {
     // did not receive valid data
-    INKError("No valid data received for URL [%.*s]; returning empty data to be safe", url.size(), url.data());
+    TSError("No valid data received for URL [%.*s]; returning empty data to be safe", url.size(), url.data());
     resp_data.clear();
     return false;
   }
   resp_data.set(req_data.body, req_data.body_len, req_data.bufp, req_data.hdr_loc);
-  INKDebug(_debug_tag.c_str(), "[%s] Found data for URL [%.*s] of size %d starting with [%.5s]", 
+  TSDebug(_debug_tag.c_str(), "[%s] Found data for URL [%.*s] of size %d starting with [%.5s]", 
            __FUNCTION__, url.size(), url.data(), req_data.body_len, req_data.body);
   return true;
 }
@@ -215,7 +215,7 @@ DataStatus
 HttpDataFetcherImpl::getRequestStatus(const string &url) const {
   UrlToContentMap::const_iterator iter = _pages.find(url);
   if (iter == _pages.end()) {
-    INKError("Status being requested for unregistered URL [%.*s]", url.size(), url.data());
+    TSError("Status being requested for unregistered URL [%.*s]", url.size(), url.data());
     return STATUS_ERROR;
   }
   if (!(iter->second).complete) {
@@ -230,7 +230,7 @@ HttpDataFetcherImpl::getRequestStatus(const string &url) const {
 void
 HttpDataFetcherImpl::useHeader(const HttpHeader &header) {
   if (Utils::areEqual(header.name, header.name_len,
-                      INK_MIME_FIELD_ACCEPT_ENCODING, INK_MIME_LEN_ACCEPT_ENCODING)) {
+                      TS_MIME_FIELD_ACCEPT_ENCODING, TS_MIME_LEN_ACCEPT_ENCODING)) {
     return;
   }
   string name(header.name, header.name_len);

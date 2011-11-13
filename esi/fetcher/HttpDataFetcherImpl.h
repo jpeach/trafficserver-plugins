@@ -5,7 +5,7 @@
 #include <list>
 #include <vector>
 
-#include "InkAPI.h"
+#include "ts/ts.h"
 #include "StringHash.h"
 #include "HttpHeader.h"
 #include "HttpDataFetcher.h"
@@ -15,7 +15,7 @@ class HttpDataFetcherImpl : public HttpDataFetcher
 
 public:
 
-  HttpDataFetcherImpl(INKCont contp, unsigned int client_ip, int client_port, const char *debug_tag);
+  HttpDataFetcherImpl(TSCont contp, sockaddr const* client_addr, const char *debug_tag);
 
   void useHeader(const EsiLib::HttpHeader &header);
   
@@ -23,9 +23,9 @@ public:
 
   bool addFetchRequest(const std::string &url, FetchedDataProcessor *callback_obj = 0);
   
-  bool handleFetchEvent(INKEvent event, void *edata);
+  bool handleFetchEvent(TSEvent event, void *edata);
 
-  bool isFetchEvent(INKEvent event) const {
+  bool isFetchEvent(TSEvent event) const {
     int base_event_id;
     return _isFetchEvent(event, base_event_id);
   }
@@ -40,10 +40,10 @@ public:
   struct ResponseData {
     const char *content;
     int content_len;
-    INKMBuffer bufp;
-    INKMLoc hdr_loc;
+    TSMBuffer bufp;
+    TSMLoc hdr_loc;
     ResponseData() { set(0, 0, 0, 0); }
-    inline void set(const char *c, int clen, INKMBuffer b, INKMLoc loc);
+    inline void set(const char *c, int clen, TSMBuffer b, TSMLoc loc);
     void clear() { set(0, 0, 0, 0); }
   };
 
@@ -65,7 +65,7 @@ public:
 
 private:
   
-  INKCont _contp;
+  TSCont _contp;
   std::string _debug_tag;
 
   typedef std::list<FetchedDataProcessor *> CallbackObjectList;
@@ -77,8 +77,8 @@ private:
     int body_len;
     CallbackObjectList callback_objects;
     bool complete;
-    INKMBuffer bufp;
-    INKMLoc hdr_loc;
+    TSMBuffer bufp;
+    TSMLoc hdr_loc;
     RequestData() : body(0), body_len(0), complete(false), bufp(0), hdr_loc(0) { };
   };
 
@@ -90,15 +90,15 @@ private:
 
   int _n_pending_requests;
   int _curr_event_id_base;
-  INKHttpParser _http_parser;
+  TSHttpParser _http_parser;
 
   static const int FETCH_EVENT_ID_BASE;
 
-  int _getBaseEventId(INKEvent event) const {
+  int _getBaseEventId(TSEvent event) const {
     return (static_cast<int>(event) - FETCH_EVENT_ID_BASE) / 3; // integer division
   }
 
-  bool _isFetchEvent(INKEvent event, int &base_event_id) const;
+  bool _isFetchEvent(TSEvent event, int &base_event_id) const;
 
   EsiLib::StringHash _headers;
   std::string _headers_str;
@@ -107,12 +107,11 @@ private:
   void _createRequest(std::string &http_req, const std::string &url);
   inline void _release(RequestData &req_data);
 
-  unsigned int _client_ip;
-  int _client_port;
+  sockaddr const* _client_addr;
 };
 
 inline void
-HttpDataFetcherImpl::ResponseData::set(const char *c, int clen, INKMBuffer b, INKMLoc loc) {
+HttpDataFetcherImpl::ResponseData::set(const char *c, int clen, TSMBuffer b, TSMLoc loc) {
   content = c;
   content_len = clen;
   bufp = b;

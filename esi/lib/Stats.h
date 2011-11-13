@@ -3,15 +3,15 @@
 #define _ESI_STATS_H
 
 #include "Utils.h"
-#include <InkAPI.h>
+#include <ts/ts.h>
 
 namespace EsiLib {
 
 /** interface that stat systems should implement */
 class StatSystem {
 public:
-  virtual bool create(const char *name, uint32_t *handle) = 0;
-  virtual bool increment(uint32_t handle, int step = 1) = 0;
+  virtual void create(int handle) = 0;
+  virtual void increment(int handle, TSMgmtInt step = 1) = 0;
   virtual ~StatSystem() { };
 };
 
@@ -27,6 +27,8 @@ enum STAT { N_OS_DOCS = 0,
             MAX_STAT_ENUM = 7 };
 
 extern const char *STAT_NAMES[MAX_STAT_ENUM];
+extern int g_stat_indices[Stats::MAX_STAT_ENUM];
+extern StatSystem *g_system;
 
 void init(StatSystem *system);
 

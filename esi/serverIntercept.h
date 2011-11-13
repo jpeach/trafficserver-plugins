@@ -2,9 +2,9 @@
 
 #define _ESI_SERVER_INTERCEPT_H
 
-#include "InkAPI.h"
+#include "ts/ts.h"
 
-bool setupServerIntercept(INKHttpTxn txnp);
+bool setupServerIntercept(TSHttpTxn txnp);
 
 extern const char *ECHO_HEADER_PREFIX;
 extern const char *SERVER_INTERCEPT_HEADER;
