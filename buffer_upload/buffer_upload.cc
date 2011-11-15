@@ -628,9 +628,9 @@ convert_url_func(TSMBuffer req_bufp, TSMLoc req_loc)
 
   // for now we assume the <upload proxy service domain> in the format is the hostname
   // but this needs to be verified later
-  if (NOT_VALID_PTR(str) || !strncmp(str, hostname, len) && strlen(hostname) == (size_t)len) {
-    char *slash;
-    char *colon;
+  if ((NOT_VALID_PTR(str) || !strncmp(str, hostname, len)) && strlen(hostname) == (size_t)len) {
+    const char *slash;
+    const char *colon;
     //if (VALID_PTR(str))
     //  TSHandleStringRelease(req_bufp, url_loc, str);
     str = TSUrlPathGet(req_bufp, url_loc, &len);
