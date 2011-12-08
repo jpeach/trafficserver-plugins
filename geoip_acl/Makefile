@@ -14,7 +14,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-TSXS=tsxs
+TSXS?=tsxs
 GEO_LIB=GeoIP # Also check lulu.h for defines ...
 
 all:	geoip_acl.cc acl.cc
@@ -24,27 +24,4 @@ install:
 	tsxs -i -o geoip_acl.so
 
 clean:
-	rm -f *.lo *.so *.bz2 *.asc *.md5 *.sha1
-
-
-# Don't touch
-PACKAGE=geoip_acl
-VERSION=0.9
-distdir = $(PACKAGE)-$(VERSION)
-remove_distdir = \
-  { test ! -d "$(distdir)" \
-    || { find "$(distdir)" -type d ! -perm -200 -exec chmod u+w {} ';' \
-         && rm -fr "$(distdir)"; }; }
-
-asf-distdir:
-	@$(remove_distdir)
-	svn export . $(distdir)
-
-asf-dist: asf-distdir
-	tar chof - $(distdir) | bzip2 -9 -c >$(distdir).tar.bz2
-	@$(remove_distdir)
-
-asf-dist-sign: asf-dist
-	md5sum -b $(distdir).tar.bz2 >$(distdir).tar.bz2.md5
-	sha1sum -b $(distdir).tar.bz2 >$(distdir).tar.bz2.sha1
-	gpg2 --armor --output $(distdir).tar.bz2.asc  --detach-sig $(distdir).tar.bz2
+	rm -f *.lo *.so
