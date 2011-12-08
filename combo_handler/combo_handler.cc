@@ -28,7 +28,7 @@
 
 #include <ts/ts.h>
 
-#include <HttpDataFetcherImpl.h>
+#include <HttpDataFetcherImpl.h> 
 #include <gzip.h>
 #include <Utils.h>
 
@@ -44,56 +44,56 @@ static string COMBO_HANDLER_PATH;
 static int COMBO_HANDLER_PATH_SIZE;
 
 #define LOG_ERROR(fmt, args...) do {                                    \
-    INKError("[%s:%d] [%s] ERROR: " fmt, __FILE__, __LINE__, __FUNCTION__ , ##args ); \
-    INKDebug(DEBUG_TAG, "[%s:%d] [%s] ERROR: " fmt, __FILE__, __LINE__, __FUNCTION__ , ##args ); \
+    TSError("[%s:%d] [%s] ERROR: " fmt, __FILE__, __LINE__, __FUNCTION__ , ##args ); \
+    TSDebug(DEBUG_TAG, "[%s:%d] [%s] ERROR: " fmt, __FILE__, __LINE__, __FUNCTION__ , ##args ); \
   } while (0)
 
 #define LOG_DEBUG(fmt, args...) do {                                    \
-    INKDebug(DEBUG_TAG, "[%s:%d] [%s] DEBUG: " fmt, __FILE__, __LINE__, __FUNCTION__ , ##args ); \
+    TSDebug(DEBUG_TAG, "[%s:%d] [%s] DEBUG: " fmt, __FILE__, __LINE__, __FUNCTION__ , ##args ); \
   } while (0)
 
 typedef list<string> StringList;
 
 struct ClientRequest {
-  INKHttpStatus status;
+  TSHttpStatus status;
   unsigned int client_ip;
   int client_port;
   StringList file_urls;
   bool gzip_accepted;
   string defaultBucket;	//default Bucket is set to l
   ClientRequest()
-    : status(INK_HTTP_STATUS_OK), client_ip(0), client_port(0), gzip_accepted(false), defaultBucket("l") { };
+    : status(TS_HTTP_STATUS_OK), client_ip(0), client_port(0), gzip_accepted(false), defaultBucket("l") { };
 };
 
 struct InterceptData {
-  INKVConn net_vc;
-  INKCont contp;
+  TSVConn net_vc;
+  TSCont contp;
 
   struct IoHandle {
-    INKVIO vio;
-    INKIOBuffer buffer;
-    INKIOBufferReader reader;
+    TSVIO vio;
+    TSIOBuffer buffer;
+    TSIOBufferReader reader;
 
     IoHandle()
       : vio(0), buffer(0), reader(0) { };
 
     ~IoHandle() {
       if (reader) {
-        INKIOBufferReaderFree(reader);
+        TSIOBufferReaderFree(reader);
       }
       if (buffer) {
-        INKIOBufferDestroy(buffer);
+        TSIOBufferDestroy(buffer);
       }
     };
   };
 
   IoHandle input;
   IoHandle output;
-  INKHttpParser http_parser;
+  TSHttpParser http_parser;
 
   string body;
-  INKMBuffer req_hdr_bufp;
-  INKMLoc req_hdr_loc;
+  TSMBuffer req_hdr_bufp;
+  TSMLoc req_hdr_loc;
   bool req_hdr_parsed;
   bool initialized;
   ClientRequest creq;
@@ -102,20 +102,20 @@ struct InterceptData {
   bool write_complete;
   string gzipped_data;
   
-  InterceptData(INKCont cont) 
+  InterceptData(TSCont cont) 
     : net_vc(0), contp(cont), input(), output(), req_hdr_bufp(0), req_hdr_loc(0), req_hdr_parsed(false),
       initialized(false), fetcher(0), read_complete(false), write_complete(false) {
-    http_parser = INKHttpParserCreate();
+    http_parser = TSHttpParserCreate();
   }
 
-  bool init(INKVConn vconn);
+  bool init(TSVConn vconn);
   void setupWrite();
 
   ~InterceptData();
 };
 
 bool
-InterceptData::init(INKVConn vconn)
+InterceptData::init(TSVConn vconn)
 {
   if (initialized) {
     LOG_ERROR("InterceptData already initialized!");
@@ -124,13 +124,13 @@ InterceptData::init(INKVConn vconn)
   
   net_vc = vconn;
 
-  input.buffer = INKIOBufferCreate();
-  input.reader = INKIOBufferReaderAlloc(input.buffer);
-  input.vio = INKVConnRead(net_vc, contp, input.buffer, INT_MAX);
+  input.buffer = TSIOBufferCreate();
+  input.reader = TSIOBufferReaderAlloc(input.buffer);
+  input.vio = TSVConnRead(net_vc, contp, input.buffer, INT_MAX);
 
-  req_hdr_bufp = INKMBufferCreate();
-  req_hdr_loc = INKHttpHdrCreate(req_hdr_bufp);
-  INKHttpHdrTypeSet(req_hdr_bufp, req_hdr_loc, INK_HTTP_TYPE_REQUEST);
+  req_hdr_bufp = TSMBufferCreate();
+  req_hdr_loc = TSHttpHdrCreate(req_hdr_bufp);
+  TSHttpHdrTypeSet(req_hdr_bufp, req_hdr_loc, TS_HTTP_TYPE_REQUEST);
 
   fetcher = new HttpDataFetcherImpl(contp, creq.client_ip, creq.client_port, "combohandler_fetcher");
 
@@ -142,49 +142,49 @@ InterceptData::init(INKVConn vconn)
 void
 InterceptData::setupWrite()
 {
-  INKAssert(output.buffer == 0);
-  output.buffer = INKIOBufferCreate();
-  output.reader = INKIOBufferReaderAlloc(output.buffer);
-  output.vio = INKVConnWrite(net_vc, contp, output.reader, INT_MAX);
+  TSAssert(output.buffer == 0);
+  output.buffer = TSIOBufferCreate();
+  output.reader = TSIOBufferReaderAlloc(output.buffer);
+  output.vio = TSVConnWrite(net_vc, contp, output.reader, INT_MAX);
 }
 
 InterceptData::~InterceptData()
 {
   if (req_hdr_loc) {
-    INKHandleMLocRelease(req_hdr_bufp, INK_NULL_MLOC, req_hdr_loc);
+    TSHandleMLocRelease(req_hdr_bufp, TS_NULL_MLOC, req_hdr_loc);
   }
   if (req_hdr_bufp) {
-    INKMBufferDestroy(req_hdr_bufp);
+    TSMBufferDestroy(req_hdr_bufp);
   }
   if (fetcher) {
     delete fetcher;
   }
-  INKHttpParserDestroy(http_parser); 
+  TSHttpParserDestroy(http_parser); 
   if (net_vc) {
-    INKVConnClose(net_vc);
+    TSVConnClose(net_vc);
   }
 }
 
 // forward declarations
-static int handleReadRequestHeader(INKCont contp, INKEvent event, void *edata);
-static bool isComboHandlerRequest(INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_loc);
-static void getClientRequest(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_loc,
+static int handleReadRequestHeader(TSCont contp, TSEvent event, void *edata);
+static bool isComboHandlerRequest(TSMBuffer bufp, TSMLoc hdr_loc, TSMLoc url_loc);
+static void getClientRequest(TSHttpTxn txnp, TSMBuffer bufp, TSMLoc hdr_loc, TSMLoc url_loc,
                              ClientRequest &creq);
 static void parseQueryParameters(const char *query, int query_len, ClientRequest &creq);
-static void checkGzipAcceptance(INKMBuffer bufp, INKMLoc hdr_loc, ClientRequest &creq);
-static int handleServerEvent(INKCont contp, INKEvent event, void *edata);
+static void checkGzipAcceptance(TSMBuffer bufp, TSMLoc hdr_loc, ClientRequest &creq);
+static int handleServerEvent(TSCont contp, TSEvent event, void *edata);
 static bool initRequestProcessing(InterceptData &int_data, void *edata, bool &write_response);
 static bool readInterceptRequest(InterceptData &int_data);
 static bool writeResponse(InterceptData &int_data);
 static bool writeErrorResponse(InterceptData &int_data, int &n_bytes_written);
 static bool writeStandardHeaderFields(InterceptData &int_data, int &n_bytes_written);
 static void prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks, string &resp_header_fields);
-static bool getContentType(INKMBuffer bufp, INKMLoc hdr_loc, string &resp_header_fields);
-static bool getDefaultBucket(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_obj, ClientRequest &creq);
+static bool getContentType(TSMBuffer bufp, TSMLoc hdr_loc, string &resp_header_fields);
+static bool getDefaultBucket(TSHttpTxn txnp, TSMBuffer bufp, TSMLoc hdr_obj, ClientRequest &creq);
 
 
 void
-INKPluginInit(int argc, const char *argv[])
+TSPluginInit(int argc, const char *argv[])
 {
   if ((argc > 1) && (strcmp(argv[1], "-") != 0)) {
     COMBO_HANDLER_PATH =  argv[1];
@@ -207,96 +207,96 @@ INKPluginInit(int argc, const char *argv[])
   SIG_KEY_NAME = ((argc > 2) && (strcmp(argv[2], "-") != 0)) ? argv[2] : "";
   LOG_DEBUG("Signature key is [%s]", SIG_KEY_NAME.c_str());
 
-  INKCont rrh_contp = INKContCreate(handleReadRequestHeader, NULL);
-  if (!rrh_contp || (rrh_contp == INK_ERROR_PTR)) {
+  TSCont rrh_contp = TSContCreate(handleReadRequestHeader, NULL);
+  if (!rrh_contp || (rrh_contp == TS_ERROR_PTR)) {
     LOG_ERROR("Could not create read request header continuation");
     return;
   }
-  if (INKHttpHookAdd(INK_HTTP_READ_REQUEST_HDR_HOOK, rrh_contp) == INK_ERROR) {
+  if (TSHttpHookAdd(TS_HTTP_READ_REQUEST_HDR_HOOK, rrh_contp) == TS_ERROR) {
     LOG_ERROR("Error while registering to read request hook");
-    INKContDestroy(rrh_contp);
+    TSContDestroy(rrh_contp);
     return;
   }
-  Utils::init(&INKDebug, &INKError);
+  Utils::init(&TSDebug, &TSError);
   LOG_DEBUG("Plugin started");
 }
 
 static int
-handleReadRequestHeader(INKCont contp, INKEvent event, void *edata)
+handleReadRequestHeader(TSCont contp, TSEvent event, void *edata)
 {
-  INKAssert(event == INK_EVENT_HTTP_READ_REQUEST_HDR);
+  TSAssert(event == TS_EVENT_HTTP_READ_REQUEST_HDR);
 
   LOG_DEBUG("handling read request header event...");
-  INKHttpTxn txnp = static_cast<INKHttpTxn>(edata);
-  INKEvent reenable_to_event = INK_EVENT_HTTP_CONTINUE;
-  INKMBuffer bufp;
-  INKMLoc hdr_loc;
+  TSHttpTxn txnp = static_cast<TSHttpTxn>(edata);
+  TSEvent reenable_to_event = TS_EVENT_HTTP_CONTINUE;
+  TSMBuffer bufp;
+  TSMLoc hdr_loc;
 
-  if (INKHttpTxnClientReqGet(txnp, &bufp, &hdr_loc)) {
-    INKMLoc url_loc = INKHttpHdrUrlGet(bufp, hdr_loc);
-    if (url_loc && (url_loc != INK_ERROR_PTR)) {
+  if (TSHttpTxnClientReqGet(txnp, &bufp, &hdr_loc)) {
+    TSMLoc url_loc = TSHttpHdrUrlGet(bufp, hdr_loc);
+    if (url_loc && (url_loc != TS_ERROR_PTR)) {
       if (isComboHandlerRequest(bufp, hdr_loc, url_loc)) {
-        INKCont contp = INKContCreate(handleServerEvent, INKMutexCreate());
-        if (!contp || (contp == INK_ERROR_PTR)) {
+        TSCont contp = TSContCreate(handleServerEvent, TSMutexCreate());
+        if (!contp || (contp == TS_ERROR_PTR)) {
           LOG_ERROR("[%s] Could not create intercept request", __FUNCTION__);
-          reenable_to_event = INK_EVENT_HTTP_ERROR;
+          reenable_to_event = TS_EVENT_HTTP_ERROR;
         } else {
-          if (INKHttpTxnServerIntercept(contp, txnp) == INK_SUCCESS) {
+          if (TSHttpTxnServerIntercept(contp, txnp) == TS_SUCCESS) {
             InterceptData *int_data = new InterceptData(contp);
-            INKContDataSet(contp, int_data);
+            TSContDataSet(contp, int_data);
             // todo: check if these two cacheable sets are required
-            INKHttpTxnSetReqCacheableSet(txnp);
-            INKHttpTxnSetRespCacheableSet(txnp);
+            TSHttpTxnSetReqCacheableSet(txnp);
+            TSHttpTxnSetRespCacheableSet(txnp);
             getClientRequest(txnp, bufp, hdr_loc, url_loc, int_data->creq);
             LOG_DEBUG("Setup server intercept to handle client request");
           } else {
-            INKContDestroy(contp);
+            TSContDestroy(contp);
             LOG_ERROR("Could not setup server intercept");
-            reenable_to_event = INK_EVENT_HTTP_ERROR;
+            reenable_to_event = TS_EVENT_HTTP_ERROR;
           }
         }
       }
-      INKHandleMLocRelease(bufp, hdr_loc, url_loc);
+      TSHandleMLocRelease(bufp, hdr_loc, url_loc);
     } else {
       LOG_ERROR("Could not get request URL");
     }
-    INKHandleMLocRelease(bufp, INK_NULL_MLOC, hdr_loc);
+    TSHandleMLocRelease(bufp, TS_NULL_MLOC, hdr_loc);
   } else {
     LOG_ERROR("Could not get client request");
   }
 
-  INKHttpTxnReenable(txnp, reenable_to_event);
+  TSHttpTxnReenable(txnp, reenable_to_event);
   return 1;
 }
 
 static bool
-isComboHandlerRequest(INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_loc)
+isComboHandlerRequest(TSMBuffer bufp, TSMLoc hdr_loc, TSMLoc url_loc)
 {
   int method_len;
   bool retval = false;
-  const char *method = INKHttpHdrMethodGet(bufp, hdr_loc, &method_len);
+  const char *method = TSHttpHdrMethodGet(bufp, hdr_loc, &method_len);
 
-  if (method == INK_ERROR_PTR) {
+  if (method == TS_ERROR_PTR) {
     LOG_ERROR("Could not obtain method!", __FUNCTION__);
   } else {
-    if ((method_len != INK_HTTP_LEN_GET) || (strncasecmp(method, INK_HTTP_METHOD_GET, INK_HTTP_LEN_GET) != 0)) {
+    if ((method_len != TS_HTTP_LEN_GET) || (strncasecmp(method, TS_HTTP_METHOD_GET, TS_HTTP_LEN_GET) != 0)) {
       LOG_DEBUG("Unsupported method [%.*s]", method_len, method);
     } else {
       retval = true;
     }
-    INKHandleStringRelease(bufp, hdr_loc, method);
+    TSHandleStringRelease(bufp, hdr_loc, method);
 
     if (retval) {
       int path_len;
-      const char *path = INKUrlPathGet(bufp, url_loc, &path_len);
-      if (path == INK_ERROR_PTR) {
+      const char *path = TSUrlPathGet(bufp, url_loc, &path_len);
+      if (path == TS_ERROR_PTR) {
         LOG_ERROR("Could not get path from request URL");
         retval = false;
       } else {
         retval = (path_len == COMBO_HANDLER_PATH_SIZE) &&
           (strncasecmp(path, COMBO_HANDLER_PATH.c_str(), COMBO_HANDLER_PATH_SIZE) == 0);
         LOG_DEBUG("Path [%.*s] is %s combo handler path", path_len, path, (retval ? "a" : "not a"));
-        INKHandleStringRelease(bufp, hdr_loc, path);
+        TSHandleStringRelease(bufp, hdr_loc, path);
       }
     }
   }
@@ -304,24 +304,24 @@ isComboHandlerRequest(INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_loc)
 }
 
 static bool
-getDefaultBucket(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_obj, ClientRequest &creq)
+getDefaultBucket(TSHttpTxn txnp, TSMBuffer bufp, TSMLoc hdr_obj, ClientRequest &creq)
 {
   LOG_DEBUG("In getDefaultBucket");
-  INKMLoc field_loc;
+  TSMLoc field_loc;
   const char* host;
   int host_len = 0;
   bool defaultBucketFound = false;
 
-  field_loc=INKMimeHdrFieldFind(bufp, hdr_obj, INK_MIME_FIELD_HOST, -1);
-  if (field_loc == INK_ERROR_PTR) {
+  field_loc=TSMimeHdrFieldFind(bufp, hdr_obj, TS_MIME_FIELD_HOST, -1);
+  if (field_loc == TS_ERROR_PTR) {
     LOG_ERROR("Host field not found.");
     return false;
   }
 
-  host=INKMimeHdrFieldValueGet (bufp, hdr_obj, field_loc, 0, &host_len);
+  host=TSMimeHdrFieldValueGet (bufp, hdr_obj, field_loc, 0, &host_len);
   if (!host || host_len <= 0) {
     LOG_ERROR("Error Extracting Host Header");
-    INKHandleMLocRelease (bufp, hdr_obj, field_loc);
+    TSHandleMLocRelease (bufp, hdr_obj, field_loc);
     return false;
   }
 
@@ -336,32 +336,32 @@ getDefaultBucket(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_obj, ClientReques
         }
     }
 
-  INKHandleMLocRelease (bufp, hdr_obj, field_loc);
-  INKHandleStringRelease(bufp, field_loc, host);
+  TSHandleMLocRelease (bufp, hdr_obj, field_loc);
+  TSHandleStringRelease(bufp, field_loc, host);
 
   LOG_DEBUG("defaultBucket: %s", creq.defaultBucket.data());
   return defaultBucketFound;
 }
 
 static void
-getClientRequest(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_loc, ClientRequest &creq)
+getClientRequest(TSHttpTxn txnp, TSMBuffer bufp, TSMLoc hdr_loc, TSMLoc url_loc, ClientRequest &creq)
 {
   int query_len;
-  const char *query = INKUrlHttpQueryGet(bufp, url_loc, &query_len);
+  const char *query = TSUrlHttpQueryGet(bufp, url_loc, &query_len);
 
-  if (query == INK_ERROR_PTR) {
+  if (query == TS_ERROR_PTR) {
     LOG_ERROR("Could not get query from request URL");
   } else {
     if (!getDefaultBucket(txnp, bufp, hdr_loc, creq))
       {
         LOG_ERROR("failed getting Default Bucket for the request");
-        INKHandleStringRelease(bufp, url_loc, query);
+        TSHandleStringRelease(bufp, url_loc, query);
         return;
       }
     parseQueryParameters(query, query_len, creq);
-    INKHandleStringRelease(bufp, url_loc, query);
-    creq.client_ip = ntohl(INKHttpTxnClientIPGet(txnp));
-    if (INKHttpTxnClientRemotePortGet(txnp, &creq.client_port) != INK_SUCCESS) {
+    TSHandleStringRelease(bufp, url_loc, query);
+    creq.client_ip = ntohl(TSHttpTxnClientIPGet(txnp));
+    if (TSHttpTxnClientRemotePortGet(txnp, &creq.client_port) != TS_SUCCESS) {
       creq.client_port = 0;
     } else {
       creq.client_port = ntohs(static_cast<uint16_t>(creq.client_port));
@@ -373,7 +373,7 @@ getClientRequest(INKHttpTxn txnp, INKMBuffer bufp, INKMLoc hdr_loc, INKMLoc url_
 static void
 parseQueryParameters(const char *query, int query_len, ClientRequest &creq)
 {
-  creq.status = INK_HTTP_STATUS_OK;
+  creq.status = TS_HTTP_STATUS_OK;
   int param_start_pos = 0;
   bool sig_verified = false;
   int colon_pos = -1;
@@ -470,57 +470,57 @@ parseQueryParameters(const char *query, int query_len, ClientRequest &creq)
   }
 }
 if (!creq.file_urls.size()) {
-  creq.status = INK_HTTP_STATUS_BAD_REQUEST;
+  creq.status = TS_HTTP_STATUS_BAD_REQUEST;
  } else if (SIG_KEY_NAME.size() && !sig_verified) {
   LOG_DEBUG("Invalid/empty signature found; Need valid signature");
-  creq.status = INK_HTTP_STATUS_FORBIDDEN;
+  creq.status = TS_HTTP_STATUS_FORBIDDEN;
   creq.file_urls.clear();
  }
 }
 
 static void
-checkGzipAcceptance(INKMBuffer bufp, INKMLoc hdr_loc, ClientRequest &creq)
+checkGzipAcceptance(TSMBuffer bufp, TSMLoc hdr_loc, ClientRequest &creq)
 {
   creq.gzip_accepted = false;
-  INKMLoc field_loc = INKMimeHdrFieldFind(bufp, hdr_loc, INK_MIME_FIELD_ACCEPT_ENCODING,
-                                          INK_MIME_LEN_ACCEPT_ENCODING);
-  if ((field_loc != INK_ERROR_PTR) && field_loc) {
+  TSMLoc field_loc = TSMimeHdrFieldFind(bufp, hdr_loc, TS_MIME_FIELD_ACCEPT_ENCODING,
+                                          TS_MIME_LEN_ACCEPT_ENCODING);
+  if ((field_loc != TS_ERROR_PTR) && field_loc) {
     const char *value;
     int value_len;
-    int n_values = INKMimeHdrFieldValuesCount(bufp, hdr_loc, field_loc);
+    int n_values = TSMimeHdrFieldValuesCount(bufp, hdr_loc, field_loc);
 
     for (int i = 0; i < n_values; ++i) {
-      if (INKMimeHdrFieldValueStringGet(bufp, hdr_loc, field_loc, i, &value, &value_len) == INK_SUCCESS) {
-        if ((value_len == INK_HTTP_LEN_GZIP) && (strncasecmp(value, INK_HTTP_VALUE_GZIP, value_len) == 0)) {
+      if (TSMimeHdrFieldValueStringGet(bufp, hdr_loc, field_loc, i, &value, &value_len) == TS_SUCCESS) {
+        if ((value_len == TS_HTTP_LEN_GZIP) && (strncasecmp(value, TS_HTTP_VALUE_GZIP, value_len) == 0)) {
           creq.gzip_accepted = true;
         }
-        INKHandleStringRelease(bufp, hdr_loc, value);
+        TSHandleStringRelease(bufp, hdr_loc, value);
       } else {
-        LOG_DEBUG("Error while getting value # %d of header [%.*s]", i, INK_MIME_LEN_ACCEPT_ENCODING,
-                  INK_MIME_FIELD_ACCEPT_ENCODING);
+        LOG_DEBUG("Error while getting value # %d of header [%.*s]", i, TS_MIME_LEN_ACCEPT_ENCODING,
+                  TS_MIME_FIELD_ACCEPT_ENCODING);
       }
       if (creq.gzip_accepted) {
         break;
       }
     }
-    INKHandleMLocRelease(bufp, hdr_loc, field_loc);
+    TSHandleMLocRelease(bufp, hdr_loc, field_loc);
   }
   LOG_DEBUG("Client %s gzip encoding", (creq.gzip_accepted ? "accepts" : "does not accept"));
 }
 
 static int
-handleServerEvent(INKCont contp, INKEvent event, void *edata)
+handleServerEvent(TSCont contp, TSEvent event, void *edata)
 {
-  InterceptData *int_data = static_cast<InterceptData *>(INKContDataGet(contp));
+  InterceptData *int_data = static_cast<InterceptData *>(TSContDataGet(contp));
   bool write_response = false;
 
   switch (event) {
-  case INK_EVENT_NET_ACCEPT_FAILED:
+  case TS_EVENT_NET_ACCEPT_FAILED:
     LOG_DEBUG("Received net accept failed event; going to abort continuation");
     int_data->read_complete = int_data->write_complete = true;
     break;
 
-  case INK_EVENT_NET_ACCEPT:
+  case TS_EVENT_NET_ACCEPT:
     LOG_DEBUG("Received net accept event");
     if (!initRequestProcessing(*int_data, edata, write_response)) {
       LOG_ERROR("Could not initialize request processing");
@@ -528,7 +528,7 @@ handleServerEvent(INKCont contp, INKEvent event, void *edata)
     }
     break;
 
-  case INK_EVENT_VCONN_READ_READY:
+  case TS_EVENT_VCONN_READ_READY:
     LOG_DEBUG("Received read ready event");
     if (!readInterceptRequest(*int_data)) {
       LOG_ERROR("Error while reading from input vio");
@@ -536,22 +536,22 @@ handleServerEvent(INKCont contp, INKEvent event, void *edata)
     }
     break;
 
-  case INK_EVENT_VCONN_READ_COMPLETE:
-  case INK_EVENT_VCONN_EOS:
+  case TS_EVENT_VCONN_READ_COMPLETE:
+  case TS_EVENT_VCONN_EOS:
     LOG_DEBUG("Received read complete/eos event %d", event);
     int_data->read_complete = true;
     break;
 
-  case INK_EVENT_VCONN_WRITE_READY:
+  case TS_EVENT_VCONN_WRITE_READY:
     LOG_DEBUG("Received write ready event");
     break;
 
-  case INK_EVENT_VCONN_WRITE_COMPLETE:
+  case TS_EVENT_VCONN_WRITE_COMPLETE:
     LOG_DEBUG("Received write complete event");
     int_data->write_complete = true;
     break;
 
-  case INK_EVENT_ERROR:
+  case TS_EVENT_ERROR:
     LOG_ERROR("Received error event!");
     break;
 
@@ -579,7 +579,7 @@ handleServerEvent(INKCont contp, INKEvent event, void *edata)
   if (int_data->read_complete && int_data->write_complete) {
     LOG_DEBUG("Completed request processing. Shutting down...");
     delete int_data;
-    INKContDestroy(contp);
+    TSContDestroy(contp);
   }
 
   return 1;
@@ -588,13 +588,13 @@ handleServerEvent(INKCont contp, INKEvent event, void *edata)
 static bool
 initRequestProcessing(InterceptData &int_data, void *edata, bool &write_response)
 {
-  INKAssert(int_data.initialized == false);
-  if (!int_data.init(static_cast<INKVConn>(edata))) {
+  TSAssert(int_data.initialized == false);
+  if (!int_data.init(static_cast<TSVConn>(edata))) {
     LOG_ERROR("Could not initialize intercept data!");
     return false;
   }
 
-  if (int_data.creq.status == INK_HTTP_STATUS_OK) {
+  if (int_data.creq.status == TS_HTTP_STATUS_OK) {
     for (StringList::iterator iter = int_data.creq.file_urls.begin();
          iter != int_data.creq.file_urls.end(); ++iter) {
       if (!int_data.fetcher->addFetchRequest(*iter)) {
@@ -613,9 +613,9 @@ initRequestProcessing(InterceptData &int_data, void *edata, bool &write_response
 static bool
 readInterceptRequest(InterceptData &int_data)
 {
-  INKAssert(!int_data.read_complete);
-  int avail = INKIOBufferReaderAvail(int_data.input.reader);
-  if (avail == INK_ERROR) {
+  TSAssert(!int_data.read_complete);
+  int avail = TSIOBufferReaderAvail(int_data.input.reader);
+  if (avail == TS_ERROR) {
     LOG_ERROR("Error while getting number of bytes available");
     return false;
   }
@@ -624,17 +624,17 @@ readInterceptRequest(InterceptData &int_data)
   if (avail > 0) {
     int data_len;
     const char *data;
-    INKIOBufferBlock block = INKIOBufferReaderStart(int_data.input.reader);
+    TSIOBufferBlock block = TSIOBufferReaderStart(int_data.input.reader);
     while (block != NULL) {
-      data = INKIOBufferBlockReadStart(block, int_data.input.reader, &data_len);
+      data = TSIOBufferBlockReadStart(block, int_data.input.reader, &data_len);
       const char *endptr = data + data_len;
-      if (INKHttpHdrParseReq(int_data.http_parser, int_data.req_hdr_bufp, int_data.req_hdr_loc,
-                             &data, endptr) == INK_PARSE_DONE) {
+      if (TSHttpHdrParseReq(int_data.http_parser, int_data.req_hdr_bufp, int_data.req_hdr_loc,
+                             &data, endptr) == TS_PARSE_DONE) {
         int_data.read_complete = true;
       }
       consumed += data_len;
-      block = INKIOBufferBlockNext(block);
-      if (block == INK_ERROR_PTR) {
+      block = TSIOBufferBlockNext(block);
+      if (block == TS_ERROR_PTR) {
         LOG_ERROR("Error while getting block from ioreader");
         return false;
       }
@@ -642,20 +642,20 @@ readInterceptRequest(InterceptData &int_data)
   }
   LOG_DEBUG("Consumed %d bytes from input vio", consumed);
   
-  if (INKIOBufferReaderConsume(int_data.input.reader, consumed) == INK_ERROR) {
+  if (TSIOBufferReaderConsume(int_data.input.reader, consumed) == TS_ERROR) {
     LOG_ERROR("Error while consuming data from input vio");
     return false;
   }
   
   // Modify the input VIO to reflect how much data we've completed.
-  if (INKVIONDoneSet(int_data.input.vio, INKVIONDoneGet(int_data.input.vio) + consumed) == INK_ERROR) {
+  if (TSVIONDoneSet(int_data.input.vio, TSVIONDoneGet(int_data.input.vio) + consumed) == TS_ERROR) {
     LOG_ERROR("Error while setting ndone on input vio");
     return false;
   }
 
   if (!int_data.read_complete) {
     LOG_DEBUG("Re-enabling input VIO as request header not completely read yet");
-    INKVIOReenable(int_data.input.vio);
+    TSVIOReenable(int_data.input.vio);
   }
   return true;
 }
@@ -677,14 +677,14 @@ writeResponse(InterceptData &int_data)
   prepareResponse(int_data, body_blocks, resp_header_fields);
 
   int n_bytes_written = 0;
-  if (int_data.creq.status != INK_HTTP_STATUS_OK) {
+  if (int_data.creq.status != TS_HTTP_STATUS_OK) {
     if (!writeErrorResponse(int_data, n_bytes_written)) {
       LOG_ERROR("Couldn't write response error");
       return false;
     }
   } else {
     n_bytes_written = OK_REPLY_LINE.size();
-    if (INKIOBufferWrite(int_data.output.buffer, OK_REPLY_LINE.data(), n_bytes_written) == INK_ERROR) {
+    if (TSIOBufferWrite(int_data.output.buffer, OK_REPLY_LINE.data(), n_bytes_written) == TS_ERROR) {
       LOG_ERROR("Error while writing reply line");
       return false;
     }
@@ -695,22 +695,22 @@ writeResponse(InterceptData &int_data)
     }
     
     if (resp_header_fields.size()) {
-      if (INKIOBufferWrite(int_data.output.buffer, resp_header_fields.data(),
-                           resp_header_fields.size()) == INK_ERROR) {
+      if (TSIOBufferWrite(int_data.output.buffer, resp_header_fields.data(),
+                           resp_header_fields.size()) == TS_ERROR) {
         LOG_ERROR("Error while writing additional response header fields");
         return false;
       }
       n_bytes_written += resp_header_fields.size();
     }
     
-    if (INKIOBufferWrite(int_data.output.buffer, "\r\n", 2) == INK_ERROR) {
+    if (TSIOBufferWrite(int_data.output.buffer, "\r\n", 2) == TS_ERROR) {
       LOG_ERROR("Error while writing header terminator");
       return false;
     }
     n_bytes_written += 2;
     
     for (ByteBlockList::iterator iter = body_blocks.begin(); iter != body_blocks.end(); ++iter) {
-      if (INKIOBufferWrite(int_data.output.buffer, iter->data, iter->data_len) == INK_ERROR) {
+      if (TSIOBufferWrite(int_data.output.buffer, iter->data, iter->data_len) == TS_ERROR) {
         LOG_ERROR("Error while writing content");
         return false;
       }
@@ -719,12 +719,12 @@ writeResponse(InterceptData &int_data)
   }
     
   LOG_DEBUG("Wrote reply of size %d", n_bytes_written);
-  if (INKVIONBytesSet(int_data.output.vio, n_bytes_written) == INK_ERROR) {
+  if (TSVIONBytesSet(int_data.output.vio, n_bytes_written) == TS_ERROR) {
     LOG_ERROR("Error while setting nbytes to %d on output vio", n_bytes_written);
     return false;
   }
   
-  if (INKVIOReenable(int_data.output.vio) == INK_ERROR) {
+  if (TSVIOReenable(int_data.output.vio) == TS_ERROR) {
     LOG_ERROR("Error while reenabling output VIO");
     return false;
   }
@@ -736,9 +736,9 @@ prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks, string &res
 {
   bool got_content_type = false;
 
-  if (int_data.creq.status == INK_HTTP_STATUS_OK) {
+  if (int_data.creq.status == TS_HTTP_STATUS_OK) {
     HttpDataFetcherImpl::ResponseData resp_data;
-    INKMLoc field_loc;
+    TSMLoc field_loc;
     time_t expires_time;
     bool got_expires_time = false;
     for (StringList::iterator iter = int_data.creq.file_urls.begin(); iter != int_data.creq.file_urls.end();
@@ -748,14 +748,14 @@ prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks, string &res
         if (!got_content_type) {
           got_content_type = getContentType(resp_data.bufp, resp_data.hdr_loc, resp_header_fields);
         }
-        field_loc = INKMimeHdrFieldFind(resp_data.bufp, resp_data.hdr_loc, INK_MIME_FIELD_EXPIRES,
-                                        INK_MIME_LEN_EXPIRES);
-        if (field_loc && (field_loc != INK_ERROR_PTR)) {
+        field_loc = TSMimeHdrFieldFind(resp_data.bufp, resp_data.hdr_loc, TS_MIME_FIELD_EXPIRES,
+                                        TS_MIME_LEN_EXPIRES);
+        if (field_loc && (field_loc != TS_ERROR_PTR)) {
           time_t curr_field_expires_time;
-          int n_values = INKMimeHdrFieldValuesCount(resp_data.bufp, resp_data.hdr_loc, field_loc);
-          if ((n_values != INK_ERROR) && (n_values > 0)) {
-            if (INKMimeHdrFieldValueDateGet(resp_data.bufp, resp_data.hdr_loc, field_loc,
-                                            &curr_field_expires_time) == INK_SUCCESS) {
+          int n_values = TSMimeHdrFieldValuesCount(resp_data.bufp, resp_data.hdr_loc, field_loc);
+          if ((n_values != TS_ERROR) && (n_values > 0)) {
+            if (TSMimeHdrFieldValueDateGet(resp_data.bufp, resp_data.hdr_loc, field_loc,
+                                            &curr_field_expires_time) == TS_SUCCESS) {
               if (!got_expires_time) {
                 expires_time = curr_field_expires_time;
                 got_expires_time = true;
@@ -766,15 +766,15 @@ prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks, string &res
               LOG_DEBUG("Error while getting date value");
             }
           }
-          INKHandleMLocRelease(resp_data.bufp, resp_data.hdr_loc, field_loc);
+          TSHandleMLocRelease(resp_data.bufp, resp_data.hdr_loc, field_loc);
         }
       } else {
         LOG_ERROR("Could not get content for requested URL [%s]", iter->c_str());
-        int_data.creq.status = INK_HTTP_STATUS_BAD_REQUEST;
+        int_data.creq.status = TS_HTTP_STATUS_BAD_REQUEST;
         break;
       }
     }
-    if (int_data.creq.status == INK_HTTP_STATUS_OK) {
+    if (int_data.creq.status == TS_HTTP_STATUS_OK) {
       if (got_expires_time) {
         if (expires_time <= 0) {
           resp_header_fields.append("Expires: 0\r\n");
@@ -788,10 +788,10 @@ prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks, string &res
     }
   }
 
-  if ((int_data.creq.status == INK_HTTP_STATUS_OK) && int_data.creq.gzip_accepted) {
+  if ((int_data.creq.status == TS_HTTP_STATUS_OK) && int_data.creq.gzip_accepted) {
     if (!gzip(body_blocks, int_data.gzipped_data)) {
       LOG_ERROR("Could not gzip content!");
-      int_data.creq.status = INK_HTTP_STATUS_INTERNAL_SERVER_ERROR;
+      int_data.creq.status = TS_HTTP_STATUS_INTERNAL_SERVER_ERROR;
     } else {
       body_blocks.clear();
       body_blocks.push_back(ByteBlock(int_data.gzipped_data.data(), int_data.gzipped_data.size()));
@@ -801,18 +801,18 @@ prepareResponse(InterceptData &int_data, ByteBlockList &body_blocks, string &res
 }
 
 static bool
-getContentType(INKMBuffer bufp, INKMLoc hdr_loc, string &resp_header_fields)
+getContentType(TSMBuffer bufp, TSMLoc hdr_loc, string &resp_header_fields)
 {
   bool retval = false;
-  INKMLoc field_loc = INKMimeHdrFieldFind(bufp, hdr_loc, INK_MIME_FIELD_CONTENT_TYPE,
-                                          INK_MIME_LEN_CONTENT_TYPE);
-  if (field_loc && (field_loc != INK_ERROR_PTR)) {
+  TSMLoc field_loc = TSMimeHdrFieldFind(bufp, hdr_loc, TS_MIME_FIELD_CONTENT_TYPE,
+                                          TS_MIME_LEN_CONTENT_TYPE);
+  if (field_loc && (field_loc != TS_ERROR_PTR)) {
     bool values_added = false;
     const char *value;
     int value_len;
-    int n_values = INKMimeHdrFieldValuesCount(bufp, hdr_loc, field_loc);
+    int n_values = TSMimeHdrFieldValuesCount(bufp, hdr_loc, field_loc);
     for (int i = 0; i < n_values; ++i) {
-      if (INKMimeHdrFieldValueStringGet(bufp, hdr_loc, field_loc, i, &value, &value_len) == INK_SUCCESS) {
+      if (TSMimeHdrFieldValueStringGet(bufp, hdr_loc, field_loc, i, &value, &value_len) == TS_SUCCESS) {
         if (!values_added) {
           resp_header_fields.append("Content-Type: ");
           values_added = true;
@@ -820,12 +820,12 @@ getContentType(INKMBuffer bufp, INKMLoc hdr_loc, string &resp_header_fields)
           resp_header_fields.append(", ");
         }
         resp_header_fields.append(value, value_len);
-        INKHandleStringRelease(bufp, hdr_loc, value);
+        TSHandleStringRelease(bufp, hdr_loc, value);
       } else {
         LOG_DEBUG("Error while getting Content-Type value #%d", i);
       }
     }
-    INKHandleMLocRelease(bufp, hdr_loc, field_loc);
+    TSHandleMLocRelease(bufp, hdr_loc, field_loc);
     if (values_added) {
       resp_header_fields.append("\r\n");
       retval = true;
@@ -841,17 +841,17 @@ static const char INVARIANT_FIELD_LINES_SIZE = sizeof(INVARIANT_FIELD_LINES) - 1
 static bool
 writeStandardHeaderFields(InterceptData &int_data, int &n_bytes_written)
 {
-  if (INKIOBufferWrite(int_data.output.buffer, INVARIANT_FIELD_LINES,
-                       INVARIANT_FIELD_LINES_SIZE) == INK_ERROR) {
+  if (TSIOBufferWrite(int_data.output.buffer, INVARIANT_FIELD_LINES,
+                       INVARIANT_FIELD_LINES_SIZE) == TS_ERROR) {
     LOG_ERROR("Error while writing invariant fields");
     return false;
   }
   n_bytes_written += INVARIANT_FIELD_LINES_SIZE;
-  time_t time_now = static_cast<time_t>(INKhrtime() / 1000000000); // it returns nanoseconds!
+  time_t time_now = static_cast<time_t>(TShrtime() / 1000000000); // it returns nanoseconds!
   char last_modified_line[128];
   int last_modified_line_size = strftime(last_modified_line, 128, "Last-Modified: %a, %d %b %Y %T GMT\r\n",
                                          gmtime(&time_now));
-  if (INKIOBufferWrite(int_data.output.buffer, last_modified_line, last_modified_line_size) == INK_ERROR) {
+  if (TSIOBufferWrite(int_data.output.buffer, last_modified_line, last_modified_line_size) == TS_ERROR) {
     LOG_ERROR("Error while writing last-modified fields");
     return false;
   }
@@ -864,17 +864,17 @@ writeErrorResponse(InterceptData &int_data, int &n_bytes_written)
 {
   const string *response;
   switch (int_data.creq.status) {
-  case INK_HTTP_STATUS_BAD_REQUEST:
+  case TS_HTTP_STATUS_BAD_REQUEST:
     response = &BAD_REQUEST_RESPONSE;
     break;
-  case INK_HTTP_STATUS_FORBIDDEN:
+  case TS_HTTP_STATUS_FORBIDDEN:
     response = &FORBIDDEN_RESPONSE;
     break;
   default:
     response = &ERROR_REPLY_RESPONSE;
     break;
   } 
-  if (INKIOBufferWrite(int_data.output.buffer, response->data(), response->size()) == INK_ERROR) {
+  if (TSIOBufferWrite(int_data.output.buffer, response->data(), response->size()) == TS_ERROR) {
     LOG_ERROR("Error while writing error response");
     return false;
   }
