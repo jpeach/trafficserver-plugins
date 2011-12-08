@@ -29,8 +29,8 @@
 #define __RESOURCES_H__ 1
 
 
-#include <RemapAPI.h>
-#include <InkAPI.h>
+#include <ts/remap.h>
+#include <ts/ts.h>
 
 
 
@@ -40,23 +40,23 @@
 class Resources
 {
 public:
-  Resources(INKHttpTxn txnp, TSRemapRequestInfo *rri) :
+  Resources(TSHttpTxn txnp, TSRemapRequestInfo *rri) :
     _txnp(txnp), _rri(rri), _jar(NULL), _bufp(NULL), _hdrLoc(NULL)
   { }
 
   ~Resources() {
     if (_hdrLoc) {
-      INKDebug("balancer", "Releasing the client request headers");
-      INKHandleMLocRelease(_bufp, INK_NULL_MLOC, _hdrLoc);
+      TSDebug("balancer", "Releasing the client request headers");
+      TSHandleMLocRelease(_bufp, TS_NULL_MLOC, _hdrLoc);
     }
 
     if (_jar) {
-      INKDebug("balancer", "Destroying the cookie jar");
+      TSDebug("balancer", "Destroying the cookie jar");
       // TODO - destroy cookies
     }
   }
 
-  const INKHttpTxn getTxnp() const { return _txnp; }
+  const TSHttpTxn getTxnp() const { return _txnp; }
     
   const TSRemapRequestInfo* getRRI() const { return _rri; }
 
@@ -72,18 +72,18 @@ public:
       memcpy(cookie_hdr, _rri->request_cookie, _rri->request_cookie_size);
       cookie_hdr[_rri->request_cookie_size] = '\0';
       _jar = // TODO - create cookies
-      INKDebug("balancer", "Creating the cookie jar");
+      TSDebug("balancer", "Creating the cookie jar");
     }
 
     return _jar;
   }
 
-  const INKMBuffer
+  const TSMBuffer
   getBufp() {
     if (_bufp) {
       return _bufp;
     } else {
-      if (!_txnp || !INKHttpTxnClientReqGet(_txnp, &_bufp, &_hdrLoc)) {
+      if (!_txnp || !TSHttpTxnClientReqGet(_txnp, &_bufp, &_hdrLoc)) {
         _bufp = NULL;
         _hdrLoc = NULL;
       }
@@ -91,7 +91,7 @@ public:
     }
   }
 
-  const INKMLoc
+  const TSMLoc
   getHdrLoc() {
     if (!_bufp || !_hdrLoc)
       (void)getBufp();
@@ -100,11 +100,11 @@ public:
   }
 
 private:
-  INKHttpTxn _txnp;
+  TSHttpTxn _txnp;
   TSRemapRequestInfo* _rri;
   cookiejar_t _jar;
-  INKMBuffer _bufp;
-  INKMLoc _hdrLoc;
+  TSMBuffer _bufp;
+  TSMLoc _hdrLoc;
 };
 
 

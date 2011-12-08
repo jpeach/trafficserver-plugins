@@ -41,8 +41,8 @@
 
 #include <string>
 
-#include <RemapAPI.h>
-#include <InkAPI.h>
+#include <ts/remap.h>
+#include <ts/ts.h>
 
 #include "resources.h"
 #include "hashkey.h"
@@ -79,7 +79,7 @@ public:
       _first_hash = tmp;
     }
     if (_rotation)
-      INKfree(_rotation);
+      TSfree(_rotation);
   };
 
   // Some simple setters and getters
@@ -89,10 +89,10 @@ public:
   char* rotation() const { return _rotation; };
   void set_rotation(const std::string& rot) {
     if (rot.size() > 255) {
-      INKError("Rotation name is too long");
+      TSError("Rotation name is too long");
       return;
     }
-    _rotation = INKstrdup(rot.c_str());
+    _rotation = TSstrdup(rot.c_str());
   }
 
   int bucket_hosts() const { return _bucket_hosts; };
@@ -148,8 +148,8 @@ public:
           hk = hk->next;
         }
         *p = '\0';
-        if (INKIsDebugTagSet("balancer")) {
-          INKDebug("balancer", "Making %s hash ID's using %s", secondary ? "secondary" : "primary", buf);
+        if (TSIsDebugTagSet("balancer")) {
+          TSDebug("balancer", "Making %s hash ID's using %s", secondary ? "secondary" : "primary", buf);
         }
         ycrMD5_r(buf, key_len, id);
       } else {
@@ -159,7 +159,7 @@ public:
 
           *buf = resr.getRRI()->client_ip; // ToDo: this only works for IPv4
 
-          INKDebug("balancer", "Making secondary hash ID's using IP (default) = %s", buf);
+          TSDebug("balancer", "Making secondary hash ID's using IP (default) = %s", buf);
           ycrMD5_r(buf, key_len, id);
         } else {
           // Primary ID defaults to URL (if none of the specified hashes computes)
@@ -167,7 +167,7 @@ public:
 
           memcpy(buf, resr.getRRI()->orig_url, resr.getRRI()->orig_url_size);
           buf[resr.getRRI()->orig_url_size] = '\0';
-          INKDebug("balancer", "Making primary hash ID's using URL (default) = %s", buf);
+          TSDebug("balancer", "Making primary hash ID's using URL (default) = %s", buf);
           ycrMD5_r(buf, key_len, id);
         }
       }
@@ -208,7 +208,7 @@ tsremap_init(TSREMAP_INTERFACE *api_info, char *errbuf, int errbuf_size)
     return -3;
   }
 
-  INKDebug("balancer", "plugin is succesfully initialized");
+  TSDebug("balancer", "plugin is succesfully initialized");
   return 0;
 }
 
@@ -224,7 +224,7 @@ tsremap_new_instance(int argc, char *argv[], ihandle *ih, char *errbuf, int errb
   *ih = static_cast<ihandle>(ri);
 
   if (ri == NULL) {
-    INKError("Unable to create remap instance");
+    TSError("Unable to create remap instance");
     return -5;
   }
 
@@ -238,7 +238,7 @@ tsremap_new_instance(int argc, char *argv[], ihandle *ih, char *errbuf, int errb
       std::string::size_type sep = arg.find_first_of(":");
 
       if (sep == std::string::npos) {
-        INKError("Malformed options in balancer: %s", argv[ix]);
+        TSError("Malformed options in balancer: %s", argv[ix]);
       } else {
         std::string arg_val = arg.substr(sep + 1, std::string::npos);
 
@@ -253,7 +253,7 @@ tsremap_new_instance(int argc, char *argv[], ihandle *ih, char *errbuf, int errb
             URLHashKey* hk = new URLHashKey();
 
             if (NULL == hk) {
-              INKError("Couldn't create balancer URL hash key");
+              TSError("Couldn't create balancer URL hash key");
             } else {
               ri->append_hash(hk, secondary);
             }
@@ -261,7 +261,7 @@ tsremap_new_instance(int argc, char *argv[], ihandle *ih, char *errbuf, int errb
             PathHashKey* hk = new PathHashKey();
 
             if (NULL == hk) {
-              INKError("Couldn't create balancer path hash key");
+              TSError("Couldn't create balancer path hash key");
             } else {
               ri->append_hash(hk, secondary);
             }
@@ -269,7 +269,7 @@ tsremap_new_instance(int argc, char *argv[], ihandle *ih, char *errbuf, int errb
             IPHashKey* hk = new IPHashKey();
 
             if (NULL == hk) {
-              INKError("Couldn't create balancer IP hash key");
+              TSError("Couldn't create balancer IP hash key");
             } else {
               ri->append_hash(hk, secondary);
             }
@@ -278,7 +278,7 @@ tsremap_new_instance(int argc, char *argv[], ihandle *ih, char *errbuf, int errb
             std::string::size_type sep2 = arg_val.find_first_of("/");
 
             if (sep2 == std::string::npos) {
-              INKError("Malformed hash options in balancer: %s", argv[ix]);
+              TSError("Malformed hash options in balancer: %s", argv[ix]);
             } else {
               std::string arg_val2 = arg_val.substr(sep2 + 1, std::string::npos);
 
@@ -286,7 +286,7 @@ tsremap_new_instance(int argc, char *argv[], ihandle *ih, char *errbuf, int errb
                 CookieHashKey* hk = new CookieHashKey(arg_val2);
 
                 if (NULL == hk) {
-                  INKError("Couldn't create balancer cookie hash key");
+                  TSError("Couldn't create balancer cookie hash key");
                 } else {
                   ri->append_hash(hk, secondary);
                 }
@@ -294,17 +294,17 @@ tsremap_new_instance(int argc, char *argv[], ihandle *ih, char *errbuf, int errb
                 HeaderHashKey* hk = new HeaderHashKey(arg_val2);
 
                 if (NULL == hk) {
-                  INKError("Couldn't create balancer header hash key");
+                  TSError("Couldn't create balancer header hash key");
                 } else {
                   ri->append_hash(hk, secondary);
                 }
               } else {
-                INKError("Unknown balancer hash option: %s", argv[ix]);
+                TSError("Unknown balancer hash option: %s", argv[ix]);
               }
             }
           }
         } else {
-          INKError("Unknown balancer option: %s", argv[ix]);
+          TSError("Unknown balancer option: %s", argv[ix]);
         }
       }
     }
@@ -337,7 +337,7 @@ tsremap_remap(ihandle ih, rhandle rh, REMAP_REQUEST_INFO *rri)
   char *rot;
 
   if (NULL == ih) {
-    INKDebug("balancer", "Falling back to default URL on remap without rules");
+    TSDebug("balancer", "Falling back to default URL on remap without rules");
     return 0;
   }
   balancer = static_cast<BalancerInstance*>(ih);
@@ -367,7 +367,7 @@ tsremap_remap(ihandle ih, rhandle rh, REMAP_REQUEST_INFO *rri)
 
   if (balancer->has_primary_hash()) {
     char id1[MD5_DIGEST_LENGTH+1];
-    Resources resr((INKHttpTxn)rh, rri);
+    Resources resr((TSHttpTxn)rh, rri);
     
     balancer_info.num_bucket_hosts = balancer->bucket_hosts();
 
@@ -382,33 +382,33 @@ tsremap_remap(ihandle ih, rhandle rh, REMAP_REQUEST_INFO *rri)
       balancer_info.secondary_id = id2;
       balancer_info.secondary_id_len = MD5_DIGEST_LENGTH;
 
-      INKDebug("balancer", "Calling balancer_lookup(\"%s\") with primary and secondary hash", rot);
+      TSDebug("balancer", "Calling balancer_lookup(\"%s\") with primary and secondary hash", rot);
       res = balancer_lookup(rot, &balancer_info);
     } else {
-      INKDebug("balancer", "Calling balancer_lookup(\"%s\") with primary hash", rot);
+      TSDebug("balancer", "Calling balancer_lookup(\"%s\") with primary hash", rot);
       res = balancer_lookup(rot, &balancer_info);
     }
   } else {
-    INKDebug("balancer", "Calling balancer_lookup(\"%s\") without hash", rot);
+    TSDebug("balancer", "Calling balancer_lookup(\"%s\") without hash", rot);
     res = balancer_lookup(rot, &balancer_info);
   }
 
   // Check (and use) the balancer lookup results
   if (!res) {
-    INKDebug("balancer", "BALANCER has no data for %s, using To-URL (error is %d)", rot, balancer_error);
+    TSDebug("balancer", "BALANCER has no data for %s, using To-URL (error is %d)", rot, balancer_error);
     return 0;
   } else {
     if ((balancer_port > 0) && (balancer_port != rri->remap_to_port)) {
       rri->new_port = balancer_port;
-      INKDebug("balancer", "Changing request to port %d", balancer_port);
+      TSDebug("balancer", "Changing request to port %d", balancer_port);
     }
     if (balancer->host_ip()) {
       unsigned char *ip = (unsigned char*)res->h_addr;
 
       rri->new_host_size = snprintf(rri->new_host, 16, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-      INKDebug("balancer", "Setting real-host IP to %.*s (IP for %s)", rri->new_host_size, rri->new_host, res->h_name);
+      TSDebug("balancer", "Setting real-host IP to %.*s (IP for %s)", rri->new_host_size, rri->new_host, res->h_name);
     } else {
-      INKDebug("balancer", "Setting real-host to %s", res->h_name);
+      TSDebug("balancer", "Setting real-host to %s", res->h_name);
       rri->new_host_size = strlen(res->h_name);
       if (rri->new_host_size > TSREMAP_RRI_MAX_HOST_SIZE)
         rri->new_host_size = TSREMAP_RRI_MAX_HOST_SIZE;

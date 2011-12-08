@@ -31,8 +31,8 @@
 
 #include <string>
 
-#include <RemapAPI.h>
-#include <InkAPI.h>
+#include <ts/remap.h>
+#include <ts/ts.h>
 
 #include "resources.h"
 
@@ -60,7 +60,7 @@ public:
   }
 
   void append(HashKey* hash) {
-    INKReleaseAssert(hash->next == NULL);
+    TSReleaseAssert(hash->next == NULL);
 
     if (NULL == next) {
       next = hash;
@@ -120,18 +120,18 @@ class CookieHashKey : public HashKey
       std::string tmp;
 
       tmp = cookie.substr(0, dot);
-      _main = INKstrdup(tmp.c_str());
+      _main = TSstrdup(tmp.c_str());
       _main_len = dot;
       tmp = cookie.substr(dot + 1);
       if (tmp.size() > 0) {
-        _sub = INKstrdup(tmp.c_str());
+        _sub = TSstrdup(tmp.c_str());
         _sub_len = cookie.size() - dot - 1;
       } else {
         _sub = NULL;
         _sub_len = 1;
       }
     } else {
-      _main = INKstrdup(cookie.c_str());
+      _main = TSstrdup(cookie.c_str());
       _main_len = cookie.size();
       _sub = NULL;
       _sub_len = 0;
@@ -140,9 +140,9 @@ class CookieHashKey : public HashKey
 
   ~CookieHashKey() {
     if (_main)
-      INKfree(const_cast<char*>(_main));
+      TSfree(const_cast<char*>(_main));
     if (_sub)
-      INKfree(const_cast<char*>(_sub));
+      TSfree(const_cast<char*>(_sub));
   }
 
   int
@@ -203,32 +203,32 @@ class HeaderHashKey : public HashKey
 {
  public:
   HeaderHashKey(const std::string header) {
-    _header = INKstrdup(header.c_str());
+    _header = TSstrdup(header.c_str());
     _header_len = header.size();
   }
 
   ~HeaderHashKey() {
     if (_header)
-      INKfree(const_cast<char*>(_header));
+      TSfree(const_cast<char*>(_header));
   }
 
   int
   key(const void** data, Resources& resr) const {
-    INKMBuffer bufp = resr.getBufp();
-    INKMLoc hdrLoc = resr.getHdrLoc();
-    INKMLoc fieldLoc;
+    TSMBuffer bufp = resr.getBufp();
+    TSMLoc hdrLoc = resr.getHdrLoc();
+    TSMLoc fieldLoc;
     const char* val;
     int len = -1;
 
     // Note that hdrLoc is freed as part of the Resources dtor, and we free the "string" value
     // in the free_key() implementation (after we're done with it).
-    if (bufp && hdrLoc && (fieldLoc = INKMimeHdrFieldFind(bufp, hdrLoc, _header, _header_len))) {
-      if (INK_ERROR != INKMimeHdrFieldValueStringGet(bufp, hdrLoc, fieldLoc, 0, &val, &len)) {
+    if (bufp && hdrLoc && (fieldLoc = TSMimeHdrFieldFind(bufp, hdrLoc, _header, _header_len))) {
+      if (TS_ERROR != TSMimeHdrFieldValueStringGet(bufp, hdrLoc, fieldLoc, 0, &val, &len)) {
         *data = val;
       } else {
         *data = NULL;
       }
-      INKHandleMLocRelease(bufp, hdrLoc, fieldLoc);
+      TSHandleMLocRelease(bufp, hdrLoc, fieldLoc);
     } else {
       *data = NULL;
     }
@@ -237,11 +237,11 @@ class HeaderHashKey : public HashKey
   }
 
   void free_key(const void* data, int len, Resources& resr) const {
-    INKMBuffer bufp = resr.getBufp();
-    INKMLoc hdrLoc = resr.getHdrLoc();
+    TSMBuffer bufp = resr.getBufp();
+    TSMLoc hdrLoc = resr.getHdrLoc();
 
     if (bufp && hdrLoc)
-      INKHandleStringRelease(bufp, hdrLoc, (const char*)data);
+      TSHandleStringRelease(bufp, hdrLoc, (const char*)data);
   }
 
  private:
