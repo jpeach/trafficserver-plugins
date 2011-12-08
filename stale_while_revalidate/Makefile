@@ -15,13 +15,12 @@
 #  limitations under the License.
 
 TSXS?=tsxs
-GEO_LIB=GeoIP # Also check lulu.h for defines ...
 
 all:	swr.cpp
 	$(TSXS) -v -C $?  -o stale_while_revalidate.so
 
 install:
-	tsxs -i -o geoip_acl.so
+	tsxs -i -o stale_while_revalidate.so
 
 clean:
 	rm -f *.lo *.so
