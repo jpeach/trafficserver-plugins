@@ -72,8 +72,7 @@ static int regex_substitute(char **buf, char *str, regex_info *info) {
     /* Verify the replacement has the right number of matching groups */
     for (i=0; i<info->tokcount; i++) {
         if (info->tokens[i] >= matchcount) {
-            TSError("[%s] Invalid reference int replacement: $%d\n",
-                    info->tokens[i]);
+            TSError("[%s] Invalid reference int replacement: $%d\n", PLUGIN_NAME, info->tokens[i]);
             return 0;
         }
     }
@@ -360,7 +359,7 @@ static int check_ts_version() {
 /* Generic error message function for errors in plugin initialization */
 static void initialization_error(char *msg) {
     TSError("[%s] %s\n", PLUGIN_NAME, msg);
-    TSError("[%s] Unable to initialize plugin (disabled).\n");
+    TSError("[%s] Unable to initialize plugin (disabled).\n", PLUGIN_NAME);
 }
 
 void TSPluginInit(int argc, const char *argv[]) {

@@ -213,7 +213,7 @@ CountryAcl::eval(TSRemapRequestInfo *rri, TSHttpTxn txnp) const
   switch (addr->sa_family) {
   case AF_INET:
     {
-      unsigned long ip = ntohl(reinterpret_cast<const struct sockaddr_in *>(addr)->sin_addr.s_addr);
+      uint32_t ip = ntohl(reinterpret_cast<const struct sockaddr_in *>(addr)->sin_addr.s_addr);
 
 #if MAXMIND_GEOIP
       iso = GeoIP_id_by_ipnum(gGI, ip);
