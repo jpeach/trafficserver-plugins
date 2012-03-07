@@ -23,7 +23,7 @@ TAR  = tar chof - "$$tardir"
 SUBDIRS = balancer buffer_upload cacheurl combo_handler esi geoip_acl \
 		  header_filter hipes mysql_remap regex_remap \
 		  stale_while_revalidate stats_over_http \
-		  memcached_remap
+		  memcached_remap gzip
 
 all:
 	@for plugin in $(SUBDIRS); do \
